@@ -89,7 +89,7 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 
 ## Próximos passos (roadmap)
 1. ~~Identidade visual oficial~~ (aplicada em 17/10/2026, a partir do Brand Book).
-2. Backend gratuito (sugestão: **Supabase**, plano free) para sincronizar celular e computador e não depender do localStorage.
+2. **Servidor** (em andamento desde 17/10/2026): Supabase (dados numa linha jsonb `estados`, RLS por e-mail em `membros`, histórico de 30 versões) + Netlify (app instalável, publica a branch `main`). Passo a passo em `docs/servidor.md`, SQL em `supabase/schema.sql`. Esperando o Vinícius criar as contas e mandar URL + chave anon.
 3. Rotina semanal (domingo) que lê o Seu Fisio (veja `docs/seufisio-importacao.md`) e atualiza a agenda no app.
 4. Rotina com IA que lê as anotações e o histórico e prepara as sugestões da semana.
 5. Ilustrações, fotos ou vídeos dos exercícios.
