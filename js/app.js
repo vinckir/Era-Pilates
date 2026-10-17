@@ -1,5 +1,6 @@
 import { BLOCOS, APARELHOS, RESTRICOES, OBJETIVOS } from './exercicios.js';
 import { picto } from './pictos.js';
+import { xlsxParaTsv } from './xlsx.js';
 import { sugerirPlano, alternativas, detectarRestricoes, historico } from './sugestao.js';
 import {
   state, save, replaceState, exercicios, exercicio, setExercicio, cliente,
@@ -346,9 +347,18 @@ function vCliente(id) {
   <div class="toggle"><span>Cliente ativo<br><span class="tiny">${c.inativo ? 'Inativo — não aparece ao marcar aulas; o histórico fica guardado' : 'Aparece na lista e ao marcar aulas'}</span></span>
     <button class="switch ${c.inativo ? '' : 'on'}" data-act="ativo" data-c="${c.id}" aria-label="Cliente ativo"></button></div>
   <div class="row" style="margin-top:10px">
-    ${c.plano ? `<span class="chip accent">${esc(c.plano)}</span>` : ''}
+    ${c.plano ? `<span class="chip accent">${esc(c.plano)}${c.valorMensal ? ` · ${reais(c.valorMensal)}` : ''}</span>` : ''}
+    ${c.inicioPlano ? `<span class="chip">Plano desde ${dataCurta(c.inicioPlano)}/${c.inicioPlano.slice(2, 4)}</span>` : ''}
+    ${c.reposicoes ? `<span class="chip warn">${c.reposicoes} a repor</span>` : ''}
     ${c.ultimoAtendimento ? `<span class="chip">Último atendimento ${dataCurta(c.ultimoAtendimento)}</span>` : ''}
-    ${c.telefone ? `<a class="chip" href="tel:${esc(c.telefone)}">${esc(c.telefone)}</a>` : ''}
+  </div>
+
+  <div class="section"><span class="eyebrow">Cadastro</span>
+    <div class="card flat cadastro">
+      ${linhasCadastro(c).map(([k, v]) => `<div class="row between"><span class="muted">${k}</span><span>${v}</span></div>`).join('')}
+      ${faltandoCadastro(c).length ? `<p class="tiny">Falta: ${faltandoCadastro(c).join(', ')}.</p>` : ''}
+      <button class="btn small ghost" data-act="renomear" data-c="${c.id}">Editar cadastro</button>
+    </div>
   </div>
 
   <div class="section"><span class="eyebrow">Horários fixos</span>
@@ -640,6 +650,65 @@ function sheetHorario(cId) {
   });
 }
 
+const reais = v => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+function idade(nasc) {
+  if (!nasc) return null;
+  const n = parseIso(nasc), h = new Date();
+  return h.getFullYear() - n.getFullYear() - (h < new Date(h.getFullYear(), n.getMonth(), n.getDate()) ? 1 : 0);
+}
+function linhasCadastro(c) {
+  const fone = c.telefone ? `<a href="https://wa.me/55${c.telefone.replace(/\D/g, '')}" target="_blank" rel="noopener">${esc(c.telefone)}</a>` : '';
+  return [
+    ['Telefone', fone],
+    ['Nascimento', c.nascimento ? `${dataCurta(c.nascimento)}/${c.nascimento.slice(0, 4)} · ${idade(c.nascimento)} anos` : ''],
+    ['E-mail', esc(c.email)], ['CPF', esc(c.cpf)], ['Endereço', esc(c.endereco)], ['Profissão', esc(c.profissao)],
+    ['Cliente desde', c.clienteDesde ? `${dataCurta(c.clienteDesde)}/${c.clienteDesde.slice(0, 4)}` : ''],
+    ['Uso de imagem', c.autorizaImagem === undefined ? '' : c.autorizaImagem ? 'Autorizou' : 'Não autorizou'],
+  ].filter(([, v]) => v);
+}
+function faltandoCadastro(c) {
+  return [['telefone', c.telefone], ['nascimento', c.nascimento], ['e-mail', c.email], ['CPF', c.cpf], ['endereço', c.endereco]].filter(([, v]) => !v).map(([k]) => k);
+}
+
+const PLANOS = ['Pilates 1 x semana', 'Pilates 2 x semana', 'Pilates 3 x semana', 'Pilates avulso', 'Pilates Experimental'];
+function sheetCadastro(cId) {
+  const c = cliente(cId);
+  const campo = (id, rotulo, valor = '', tipo = 'text', extra = '') => `<label class="field"><span>${rotulo}</span><input type="${tipo}" id="${id}" value="${esc(valor)}" ${extra}></label>`;
+  const planos = [...new Set([...PLANOS, c.plano].filter(Boolean))];
+  sheet(`<h2>Cadastro</h2>
+    ${campo('cdNome', 'Nome completo', c.nome)}
+    ${campo('cdFone', 'Telefone / WhatsApp', c.telefone, 'tel')}
+    ${campo('cdEmail', 'E-mail', c.email, 'email')}
+    <div class="row" style="flex-wrap:nowrap">
+      <div style="flex:1">${campo('cdNasc', 'Nascimento', c.nascimento, 'date')}</div>
+      <div style="flex:1">${campo('cdCpf', 'CPF', c.cpf, 'text', 'inputmode="numeric"')}</div>
+    </div>
+    ${campo('cdEnd', 'Endereço', c.endereco)}
+    ${campo('cdProf', 'Profissão', c.profissao)}
+    ${campo('cdDesde', 'Cliente desde', c.clienteDesde, 'date')}
+    <div class="toggle"><span>Autorizou uso de imagem</span><button class="switch ${c.autorizaImagem ? 'on' : ''}" id="cdImg" aria-label="Autorizou uso de imagem"></button></div>
+    <h3 style="margin-top:18px">Plano</h3>
+    <label class="field"><span>Plano</span><select id="cdPlano"><option value="">Sem plano</option>${planos.map(p => `<option ${p === c.plano ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
+    <div class="row" style="flex-wrap:nowrap">
+      <div style="flex:1">${campo('cdValor', 'Valor por mês (R$)', c.valorMensal ?? '', 'number', 'step="0.01" inputmode="decimal"')}</div>
+      <div style="flex:1">${campo('cdIni', 'Início do plano', c.inicioPlano, 'date')}</div>
+    </div>
+    <button class="btn primary block" id="cdOk" style="margin-top:16px">Salvar cadastro</button>`, el => {
+    const sw = el.querySelector('#cdImg');
+    sw.addEventListener('click', () => sw.classList.toggle('on'));
+    el.querySelector('#cdOk').addEventListener('click', () => {
+      const v = id => el.querySelector('#' + id).value.trim();
+      if (!v('cdNome')) return toast('O nome não pode ficar vazio');
+      Object.assign(c, {
+        nome: v('cdNome').replace(/\s+/g, ' '), telefone: v('cdFone'), email: v('cdEmail').toLowerCase(), nascimento: v('cdNasc'), cpf: v('cdCpf'),
+        endereco: v('cdEnd'), profissao: v('cdProf'), clienteDesde: v('cdDesde'), autorizaImagem: sw.classList.contains('on'),
+        plano: v('cdPlano'), valorMensal: v('cdValor') ? +v('cdValor') : undefined, inicioPlano: v('cdIni'),
+      });
+      save(); closeSheet(); render(); toast('Cadastro salvo');
+    });
+  });
+}
+
 function sheetEscolherEx(titulo, opcoes, onPick) {
   sheet(`<h2>${titulo}</h2>
     <div class="search">${I.search}<input type="search" id="pkQ" placeholder="Buscar"></div>
@@ -748,6 +817,9 @@ function limparExemplo() {
 // Aceita texto colado de planilha: colunas separadas por tab, ";" ou "|".
 const CABECALHO = /^(nome|paciente|cliente|aluno)s?$/i;
 const FONE = /^\+?[\d\s().-]{8,}$/;
+const dataBr = s => { const m = (s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
+const SEM_ENDERECO = /^n[ºo°]?\s*-?\s*,?\s*-?\s*,?\s*$/i;
+
 function importarClientes(txt) {
   let novos = 0, atualizados = 0, inativos = 0;
   const linhas = txt.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim());
@@ -755,29 +827,50 @@ function importarClientes(txt) {
   const sep = /\t|;|\|/;
   const cab = linhas[0]?.split(sep).map(x => x.trim().toLowerCase()) || [];
   const col = re => cab.findIndex(h => re.test(h));
-  const temCab = CABECALHO.test(cab[0] || '');
-  const ix = temCab ? { nome: col(/^nome|paciente|cliente/), fone: col(/telefone|celular|fone/), sit: col(/situa|status/), ult: col(/[úu]ltimo/), obs: col(/observa|plano/) } : null;
-  for (const linha of temCab ? linhas.slice(1) : linhas) {
-    const bruto = linha.split(sep).map(x => x.trim());
+  const temCab = cab.some(h => CABECALHO.test(h));
+  const ix = temCab ? {
+    nome: col(CABECALHO), fone: col(/telefone|celular|fone/), sit: col(/situa|status/), ult: col(/[úu]ltimo/), obs: col(/observa|plano/),
+    mat: col(/matr[íi]cula/), gen: col(/^g[êe]nero/), cpf: col(/^cpf/), nasc: col(/nascimento/), prof: col(/profiss/), email: col(/e-?mail/),
+    end: col(/endere/), desde: col(/cliente desde/), cad: col(/cadastro/), img: col(/imagem/), rep: col(/reposi/),
+  } : null;
+  const dados = (temCab ? linhas.slice(1) : linhas).map(l => l.split(sep).map(x => x.trim()));
+  const pegaDe = (bruto, k) => (ix && ix[k] >= 0 ? bruto[ix[k]] || '' : '');
+  // Cadastro repetido com o mesmo nome: vale a linha ativa.
+  const temAtivo = new Set(dados.filter(b => /^ativ/i.test(pegaDe(b, 'sit'))).map(b => pegaDe(b, 'nome').toLowerCase()));
+  for (const bruto of dados) {
     const cols = bruto.filter(Boolean);
     if (!cols.length) continue;
-    const pega = k => (ix && ix[k] >= 0 ? bruto[ix[k]] || '' : '');
+    const pega = k => pegaDe(bruto, k);
     const obs = pega('obs');
     if (/duplicad/i.test(obs)) continue;
-    const nome = (ix ? pega('nome') : cols[0]).replace(/\s+/g, ' ');
-    if (!nome || CABECALHO.test(nome)) continue;
+    const nome = (ix ? pega('nome') : cols[0]).replace(/\s+/g, ' ').replace(/[\u202a-\u202e]/g, '').trim();
+    if (!nome || CABECALHO.test(nome) || /^total:/i.test(nome)) continue;
+    if (/^inativ/i.test(pega('sit')) && temAtivo.has(nome.toLowerCase())) continue;
     const existia = state.clientes.some(x => x.nome.toLowerCase() === nome.toLowerCase());
     const c = acharOuCriarCliente(nome);
     existia ? atualizados++ : novos++;
     const resto = ix ? [pega('sit'), pega('fone')] : cols.slice(1);
-    if (resto.some(x => /^inativ/i.test(x))) c.inativo = true;
-    else if (resto.some(x => /^ativ/i.test(x))) c.inativo = false;
+    // Ativo/inativo mudado à mão no app vale mais que a situação do Seu Fisio; quem só faz massagem fica fora do Pilates.
+    if (!c.inativoManual && !c.soMassagem) {
+      if (resto.some(x => /^inativ/i.test(x))) c.inativo = true;
+      else if (resto.some(x => /^ativ/i.test(x))) c.inativo = false;
+    }
+    if (ix) {
+      const campo = (k, v) => { if (v) c[k] = v; };
+      campo('matricula', pega('mat')); campo('genero', pega('gen')); campo('cpf', pega('cpf'));
+      campo('nascimento', dataBr(pega('nasc'))); campo('profissao', pega('prof')); campo('email', pega('email').toLowerCase());
+      if (pega('end') && !SEM_ENDERECO.test(pega('end'))) c.endereco = pega('end');
+      campo('clienteDesde', dataBr(pega('desde'))); campo('cadastroEm', dataBr(pega('cad')));
+      if (pega('img')) c.autorizaImagem = !/n[ãa]o/i.test(pega('img'));
+      if (ix.rep >= 0) c.reposicoes = +pega('rep') || 0;
+    }
     // Quem só faz massagem/drenagem não entra na lista de Pilates (dá para reativar na ficha).
     if (/^s[óo] massagem/i.test(obs)) { c.inativo = true; c.soMassagem = true; }
     if (c.inativo) inativos++;
     const fone = resto.find(x => FONE.test(x) && x.replace(/\D/g, '').length >= 10);
     if (fone) c.telefone = fone;
-    if (obs) c.plano = obs.replace(/^(último )?plano:\s*/i, '');
+    if (/plano:|pilates|massagem|drenagem/i.test(obs)) c.plano = obs.replace(/^(último )?plano:\s*/i, '');
+    else if (obs) c.obsSeuFisio = obs;
     const ult = pega('ult');
     if (/^\d{4}-\d{2}-\d{2}$/.test(ult)) c.ultimoAtendimento = ult;
   }
@@ -785,17 +878,61 @@ function importarClientes(txt) {
   return { novos, atualizados, inativos };
 }
 
+const DOW = { domingo: 0, segunda: 1, 'terça': 2, terca: 2, quarta: 3, quinta: 4, sexta: 5, 'sábado': 6, sabado: 6 };
+function lerHorarios(txt) {
+  const hs = [];
+  for (const m of (txt || '').toLowerCase().matchAll(/(domingo|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado)(?:-feira)?\s*(?:[àa]s)?\s*(\d{1,2})[:h](\d{2})/g)) {
+    const h = { dow: DOW[m[1]], hora: `${m[2].padStart(2, '0')}:${m[3]}` };
+    if (!hs.some(x => x.dow === h.dow && x.hora === h.hora)) hs.push(h);
+  }
+  return hs.sort((a, b) => a.dow - b.dow || a.hora.localeCompare(b.hora));
+}
+
+function importarPlanos(txt) {
+  const linhas = txt.split('\n').map(l => l.replace(/\r$/, '').split('\t').map(x => x.trim()));
+  const cab = linhas[0].map(h => h.toLowerCase());
+  const col = re => cab.findIndex(h => re.test(h));
+  const ix = { mat: col(/^mat/), nome: col(/^nome|cliente/), plano: col(/^plano/), valor: col(/valor/), ini: col(/in[íi]cio/), fim: col(/^fim/), hr: col(/hor[áa]rio/) };
+  let n = 0;
+  for (const b of linhas.slice(1)) {
+    const pega = k => (ix[k] >= 0 ? b[ix[k]] || '' : '');
+    const nome = pega('nome');
+    if (!nome) continue;
+    const c = state.clientes.find(x => x.matricula && x.matricula === pega('mat')) || acharOuCriarCliente(nome);
+    if (pega('mat')) c.matricula = pega('mat');
+    if (pega('plano')) c.plano = pega('plano');
+    const v = parseFloat(pega('valor').replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(v)) c.valorMensal = v;
+    c.inicioPlano = dataBr(pega('ini')) || c.inicioPlano || '';
+    c.fimPlano = dataBr(pega('fim'));
+    const hs = lerHorarios(pega('hr'));
+    if (hs.length) c.horarios = hs;
+    if (!c.inativoManual) c.inativo = false;
+    n++;
+  }
+  save();
+  return n;
+}
+
+const tipoArquivo = t => (t.startsWith('{') || t.startsWith('[')) ? 'agenda' : /hor[áa]rio/i.test(t.split('\n')[0]) ? 'planos' : 'clientes';
+
+async function lerArquivo(f) {
+  return /\.xlsx$/i.test(f.name) ? xlsxParaTsv(await f.arrayBuffer()) : f.text();
+}
+
 async function importarArquivos(files) {
-  importarLidos(await Promise.all([...files].map(async f => ({ nome: f.name, txt: await f.text() }))));
+  importarLidos(await Promise.all([...files].map(async f => ({ nome: f.name, txt: await lerArquivo(f) }))));
 }
 
 function importarLidos(lidos) {
   if (state.exemplo) limparExemplo();
-  // Clientes primeiro, para a agenda achar os nomes já cadastrados.
-  lidos.sort((a, b) => (a.txt.trim().startsWith('{') ? 1 : 0) - (b.txt.trim().startsWith('{') ? 1 : 0));
+  // Clientes primeiro, depois os planos (horários fixos) e por fim a agenda, que acha os nomes já cadastrados.
+  const ordem = { clientes: 0, planos: 1, agenda: 2 };
+  lidos.sort((a, b) => ordem[tipoArquivo(a.txt.trim())] - ordem[tipoArquivo(b.txt.trim())]);
   const msgs = [];
   for (const { txt } of lidos) {
     const t = txt.trim();
+    if (tipoArquivo(t) === 'planos') { msgs.push(`${importarPlanos(t)} planos com horário`); continue; }
     if (t.startsWith('{') || t.startsWith('[')) {
       const r = importarAgenda(t); msgs.push(`${r.novas} aulas`);
       const nf = detectarFixos(); if (nf) msgs.push(`${nf} com horário fixo`);
@@ -807,12 +944,15 @@ function importarLidos(lidos) {
 
 // No computador, o app lê sozinho a pasta "Importacao App Aulas" (ligada como .dados).
 // Ela fica fora do GitHub e do link publicado; só existe neste PC. Reimporta quando os arquivos mudam.
-const ARQ_LOCAIS = ['clientes-erapilates.tsv', 'agenda-erapilates.json'];
+const ARQ_LOCAIS = ['clientes-erapilates.tsv', 'clientes-seufisio-completo.xlsx', 'planos-fixos-erapilates.tsv', 'agenda-erapilates.json'];
 async function sincronizarPastaLocal() {
   if (!['localhost', '127.0.0.1'].includes(location.hostname)) return;
   const lidos = [];
   for (const nome of ARQ_LOCAIS) {
-    try { const r = await fetch('.dados/' + nome, { cache: 'no-store' }); if (r.ok) lidos.push({ nome, txt: await r.text() }); } catch {}
+    try {
+      const r = await fetch('.dados/' + nome, { cache: 'no-store' });
+      if (r.ok) lidos.push({ nome, txt: /\.xlsx$/i.test(nome) ? await xlsxParaTsv(await r.arrayBuffer()) : await r.text() });
+    } catch {}
   }
   if (!lidos.length) return;
   const resumo = lidos.map(l => { let h = 5381; for (let i = 0; i < l.txt.length; i++) h = (h * 33 + l.txt.charCodeAt(i)) | 0; return `${l.nome}:${l.txt.length}:${h}`; }).join('|');
@@ -957,12 +1097,12 @@ const acoes = {
   ditar: el => ditar(el),
 
   'novo-cliente': () => sheetTexto('Novo cliente', 'Nome completo', '', nome => { const c = acharOuCriarCliente(nome); save(); go('#/cliente/' + c.id); }),
-  renomear: el => { const c = cliente(el.dataset.c); sheetTexto('Editar nome', 'Nome', c.nome, v => { c.nome = v; save(); render(); }); },
+  renomear: el => sheetCadastro(el.dataset.c),
   nivel: el => { cliente(el.dataset.c).nivel = +el.dataset.n; save(); render(); },
   obj: el => { const c = cliente(el.dataset.c); const o = el.dataset.o; c.objetivos = (c.objetivos || []).includes(o) ? c.objetivos.filter(x => x !== o) : [...(c.objetivos || []), o]; save(); render(); },
   'add-restr': el => sheetRestricao(el.dataset.c),
   'tira-restr': el => { const c = cliente(el.dataset.c); c.restricoes = c.restricoes.filter(r => r.tag !== el.dataset.t); save(); render(); },
-  ativo: el => { const c = cliente(el.dataset.c); c.inativo = !c.inativo; save(); render(); toast(c.inativo ? 'Marcado como inativo' : 'Cliente ativo de novo'); },
+  ativo: el => { const c = cliente(el.dataset.c); c.inativo = !c.inativo; c.inativoManual = true; save(); render(); toast(c.inativo ? 'Marcado como inativo' : 'Cliente ativo de novo'); },
   'cli-inativos': el => { ui.cliInativos = !!el.dataset.v; render(); },
 
   'f-ap': el => { ui.exFiltro.ap = el.dataset.v; render(); },

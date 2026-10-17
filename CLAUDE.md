@@ -34,9 +34,10 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - `js/app.js`: telas (agenda, aula, clientes, ficha, exercícios, curadoria, mais), folhas, ditado (Web Speech pt-BR) e importações.
 - `docs/metodologia.md`: pesquisa sobre Jacson Bonafé, Lolita San Miguel e Pilates clássico.
 - `docs/seufisio-importacao.md`: como extrair clientes e agenda do Seu Fisio.
+- `js/xlsx.js`: leitor de .xlsx sem biblioteca (DecompressionStream + DOMParser), para importar as planilhas do Seu Fisio direto, inclusive no celular.
 
 ## Modelo de dados (localStorage)
-`{ version:1, settings:{aparelhos, soBase}, exOverrides:{[exId]:{status,nota,video,foto,adiado}}, exCustom:[], clientes:[{id,nome,nivel,objetivos[],restricoes[{tag,desde,temporaria}],obs,favoritos[],inativo,soMassagem,telefone,plano,ultimoAtendimento,horarios[{dow,hora}]}], aulas:[{id,data,hora,clientes[≤2],status:'agendada'|'planejada'|'realizada',planos:{[clienteId]:{itens:[{exId,motivo,feito,fb}],aprovado}},notas:{[clienteId]:texto},presenca:{[clienteId]:'falta'|'justificada'},origem:'manual'|'importada'|'fixo'|'exemplo'}], excecoes:[{c,data,hora}] }`
+`{ version:1, settings:{aparelhos, soBase}, exOverrides:{[exId]:{status,nota,video,foto,adiado}}, exCustom:[], clientes:[{id,nome,nivel,objetivos[],restricoes[{tag,desde,temporaria}],obs,favoritos[],inativo,soMassagem,telefone,plano,ultimoAtendimento,horarios[{dow,hora}],matricula,genero,cpf,nascimento,profissao,email,endereco,clienteDesde,cadastroEm,autorizaImagem,reposicoes,valorMensal,inicioPlano,fimPlano,inativoManual}], aulas:[{id,data,hora,clientes[≤2],status:'agendada'|'planejada'|'realizada',planos:{[clienteId]:{itens:[{exId,motivo,feito,fb}],aprovado}},notas:{[clienteId]:texto},presenca:{[clienteId]:'falta'|'justificada'},origem:'manual'|'importada'|'fixo'|'exemplo'}], excecoes:[{c,data,hora}] }`
 
 ## Regras da marca no app (Brand Book)
 - Usar só as cores dos tokens. Texto principal café, nunca preto. Botão principal cacau com texto creme (`--primary`).
@@ -44,6 +45,13 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - Peso máximo de fonte 500. Pedra (`--ink-3`) só para legendas de 14px ou mais. Cards 14px de raio, botões em pílula, sem sombras fortes nem gradientes.
 - Ícones de traço fino (1,5px), sem preenchimento. Área de toque mínima de 44px.
 - Tom de voz: frases curtas e serenas, falando com "você".
+
+## Importação do Seu Fisio (arquivos em `../Importacao App Aulas/`)
+- `clientes-erapilates.tsv`: lista antiga (nome, telefone, situação, último atendimento, plano/“Só massagem”).
+- `clientes-seufisio-completo.xlsx`: Relatórios → Clientes → Geral, com as colunas marcadas (matrícula, CPF, nascimento, e-mail, endereço, profissão, cliente desde, uso de imagem, reposições). O cadastro no Seu Fisio é quase vazio (17/10/2026: 48 nascimentos, 26 CPFs, 31 endereços, 10 e-mails em 216).
+- `planos-fixos-erapilates.tsv`: Relatórios → Clientes → Planos Fixos (plano, valor mensal, início, fim, **horários programados**). É a fonte oficial dos horários fixos; vale mais que a detecção pela agenda.
+- `agenda-erapilates.json`: aulas futuras.
+- Ordem na importação: clientes → planos → agenda. Situação mudada à mão no app (`inativoManual`) e “só massagem” (`soMassagem`) não são sobrescritas pela situação do Seu Fisio.
 
 ## Regras de interface
 - Nada de `confirm()`/`alert()`/`prompt()`: dentro do claude.ai (moldura) e do painel do app eles não aparecem. Usar `confirmar()` (folha na própria tela).

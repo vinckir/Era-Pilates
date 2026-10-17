@@ -1,9 +1,9 @@
 // Cache simples para o app abrir mesmo sem internet no estúdio.
-const CACHE = 'era-pilates-v6';
+const CACHE = 'era-pilates-v7';
 const ARQUIVOS = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'icon-180.png', 'icon-192.png', 'icon-512.png', 'brand/logo-simbolo.png', 'brand/logo-palavra.png', 'brand/favicon-32.png',
-  'js/app.js', 'js/store.js', 'js/sugestao.js', 'js/exercicios.js', 'js/pictos.js',
+  'js/app.js', 'js/store.js', 'js/sugestao.js', 'js/exercicios.js', 'js/pictos.js', 'js/xlsx.js',
 ];
 
 self.addEventListener('install', ev => {

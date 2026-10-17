@@ -124,6 +124,10 @@ button.chip { height: 32px; padding: 0 13px; font-size: 13.5px; }
 
 .card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
 .card.flat { box-shadow: none; border: 1px solid var(--line); }
+.cadastro > .row { padding: 7px 0; border-bottom: 1px solid var(--line); gap: 12px; flex-wrap: nowrap; }
+.cadastro > .row span:last-child { text-align: right; overflow-wrap: anywhere; }
+.cadastro .tiny { margin: 10px 0 0; }
+.cadastro .btn { margin-top: 12px; }
 
 /* Lista de aulas */
 .aula { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; text-decoration: none; }
