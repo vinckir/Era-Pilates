@@ -55,8 +55,7 @@ Aplicada a partir do Brand Book v1 do ERA Pilates (outubro/2026): paleta creme, 
 
 ## Roadmap
 
-2. Importar os clientes ativos do sistema de agendamento.
-3. Backend leve (ex.: Supabase) para sincronizar os aparelhos e deixar uma rotina semanal ler a agenda e gravar as aulas.
-4. Rotina com IA que lê as anotações e o histórico e reescreve as sugestões da semana.
-5. Ilustrações, fotos ou vídeos próprios dos exercícios.
-6. Relatório de evolução para o cliente e gamificação (marcos, sequências), além de dados para stories e vídeos.
+1. Backend leve (ex.: Supabase) para sincronizar os aparelhos e deixar uma rotina semanal ler a agenda e gravar as aulas.
+2. Rotina com IA que lê as anotações e o histórico e reescreve as sugestões da semana.
+3. Ilustrações, fotos ou vídeos próprios dos exercícios.
+4. Relatório de evolução para o cliente e gamificação (marcos, sequências), além de dados para stories e vídeos.
