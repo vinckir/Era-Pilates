@@ -453,24 +453,8 @@ function vMais() {
   </div>
 
   <div class="section"><span class="eyebrow">Importar do Seu Fisio</span>
-    <p class="muted">Escolha os arquivos exportados (<code>clientes-….tsv</code> e/ou <code>agenda-….json</code>). Pode selecionar os dois juntos.
-    Clientes que já existem são atualizados; os dados de exemplo saem na primeira importação.</p>
-    <label class="btn accent block" style="justify-content:center">Escolher arquivos<input type="file" id="importArq" accept=".tsv,.csv,.txt,.json,text/plain,application/json,text/tab-separated-values" multiple hidden></label>
-  </div>
-
-  <div class="section"><span class="eyebrow">Agenda</span>
-    <p class="muted">Cole aqui a agenda (vinda do sistema de agendamento ou da rotina automática). Uma aula por linha:<br>
-    <code>2026-10-20 08:00 Ana Souza, Bruno Lima</code><br>ou o JSON <code>{"aulas":[{"data","hora","clientes":[…]}]}</code>.</p>
-    <textarea id="agendaTxt" placeholder="2026-10-20 08:00 Ana Souza, Bruno Lima" style="padding-right:14px"></textarea>
-    <button class="btn block" style="margin-top:8px" data-act="importar-agenda">Importar agenda</button>
-  </div>
-
-  <div class="section"><span class="eyebrow">Clientes em lote</span>
-    <p class="muted">Um cliente por linha — pode colar direto de uma planilha (Excel / Google Sheets / relatório do sistema).
-    A primeira coluna é o nome; se alguma coluna disser “inativo”, ele entra como inativo; telefone é reconhecido sozinho.
-    Quem já existe é atualizado, não duplicado.${state.exemplo ? ' <b>Os dados de exemplo são removidos na primeira importação.</b>' : ''}</p>
-    <textarea id="clientesTxt" placeholder="Ana Souza&#9;(51) 99999-0000&#9;Ativo&#10;Bruno Lima&#9;&#9;Inativo" style="padding-right:14px"></textarea>
-    <button class="btn block" style="margin-top:8px" data-act="importar-clientes">Adicionar clientes</button>
+    <p class="muted">Escolha os dois arquivos exportados do Seu Fisio: a lista de clientes e a agenda. Quem já está no app é atualizado.</p>
+    <label class="btn primary block" style="justify-content:center">Escolher arquivos<input type="file" id="importArq" accept=".tsv,.csv,.txt,.json,text/plain,application/json,text/tab-separated-values" multiple hidden></label>
   </div>
 
   <div class="section"><span class="eyebrow">Backup</span>
@@ -490,7 +474,7 @@ function vMais() {
     O app repete o que o cliente precisa consolidar, avança para a progressão quando você marca “fácil”, tira o que gerou “dor”
     e respeita as restrições da ficha. As anotações com menção a dor sugerem uma restrição nova.</p>
   </div>
-  <p class="tiny" style="text-align:center;margin-top:28px">ERA Pilates · app interno · v0.1</p>`;
+  <p class="tiny" style="text-align:center;margin-top:28px">ERA Pilates · app interno · v0.3</p>`;
 }
 
 // ——— Folhas (bottom sheets) ———
@@ -504,6 +488,15 @@ function sheet(html, onMount) {
   onMount?.(bg.querySelector('.sheet'));
 }
 function closeSheet() { document.querySelector('.sheet-bg')?.remove(); }
+
+function confirmar(titulo, texto, rotulo, onOk) {
+  sheet(`<h2>${titulo}</h2>${texto ? `<p class="muted">${texto}</p>` : ''}
+    <button class="btn primary block" id="cfOk" style="margin-top:14px">${rotulo}</button>
+    <button class="btn ghost block" id="cfNao" style="margin-top:8px">Cancelar</button>`, el => {
+    el.querySelector('#cfNao').addEventListener('click', closeSheet);
+    el.querySelector('#cfOk').addEventListener('click', () => { closeSheet(); onOk(); });
+  });
+}
 
 function sheetAula(aula = null) {
   const sel = new Set(aula?.clientes || []);
@@ -826,10 +819,9 @@ const acoes = {
     go('#/agenda');
   },
   reabrir: el => { const { a } = aulaAtual(el); a.status = 'planejada'; save(); render(); },
-  'apagar-aula': el => {
-    if (!confirm('Remover esta aula da agenda?')) return;
+  'apagar-aula': el => confirmar('Remover esta aula?', '', 'Remover', () => {
     state.aulas = state.aulas.filter(x => x.id !== el.dataset.a); save(); go('#/agenda');
-  },
+  }),
   ditar: el => ditar(el),
 
   'novo-cliente': () => sheetTexto('Novo cliente', 'Nome completo', '', nome => { const c = acharOuCriarCliente(nome); save(); go('#/cliente/' + c.id); }),
@@ -846,36 +838,21 @@ const acoes = {
   'novo-ex': () => sheetNovoEx(),
   'ex-st': el => { setExercicio(el.dataset.id, { status: el.dataset.v }); render(); },
   'tira-foto': el => { setExercicio(el.dataset.id, { foto: null }); render(); },
-  'apaga-ex': el => { if (!confirm('Apagar este exercício?')) return; state.exCustom = state.exCustom.filter(e => e.id !== el.dataset.id); save(); go('#/exercicios'); },
+  'apaga-ex': el => confirmar('Apagar este exercício?', '', 'Apagar', () => { state.exCustom = state.exCustom.filter(e => e.id !== el.dataset.id); save(); go('#/exercicios'); }),
   voltar: () => history.length > 1 ? history.back() : go('#/exercicios'),
   cura: el => { setExercicio(el.dataset.id, { status: el.dataset.v }); render(); },
   'cura-pular': el => { setExercicio(el.dataset.id, { adiado: Date.now() }); render(); },
 
   ap: el => { const k = el.dataset.k; state.settings.aparelhos[k] = state.settings.aparelhos[k] === false; save(); render(); },
   soBase: () => { state.settings.soBase = !state.settings.soBase; save(); render(); },
-  'importar-agenda': () => {
-    const txt = document.getElementById('agendaTxt').value;
-    if (!txt.trim()) return toast('Cole a agenda primeiro');
-    if (state.exemplo) limparExemplo();
-    try { const r = importarAgenda(txt); toast(`${r.novas} aula(s) nova(s) de ${r.total} linha(s)`); render(); }
-    catch { toast('Não entendi o formato — confira o exemplo'); }
-  },
-  'importar-clientes': () => {
-    const txt = document.getElementById('clientesTxt').value;
-    if (!txt.trim()) return toast('Cole a lista primeiro');
-    if (state.exemplo) limparExemplo();
-    const r = importarClientes(txt);
-    toast(`${r.novos} novo(s), ${r.atualizados} atualizado(s)${r.inativos ? ` · ${r.inativos} inativo(s)` : ''}`); render();
-  },
   exportar: () => {
     const blob = new Blob([JSON.stringify(state, null, 1)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `era-pilates-backup-${hoje()}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   },
-  'limpar-exemplo': () => {
-    if (!confirm('Remover todos os clientes e aulas de exemplo?')) return;
-    limparExemplo(); render(); toast('Pronto — app limpo para os clientes reais');
-  },
+  'limpar-exemplo': () => confirmar('Remover os dados de exemplo?', 'Saem os clientes e as aulas fictícios.', 'Remover', () => {
+    limparExemplo(); render(); toast('Pronto, app limpo para os clientes reais');
+  }),
 };
 
 document.addEventListener('click', ev => {
@@ -900,8 +877,9 @@ document.addEventListener('change', ev => {
   if (t.id === 'exFoto' && t.files[0]) reduzirFoto(t.files[0]).then(url => { setExercicio(t.dataset.id, { foto: url }); render(); toast('Foto salva'); });
   if (t.id === 'importArq' && t.files.length) importarArquivos(t.files).catch(() => toast('Não consegui ler o arquivo'));
   if (t.id === 'restaurar' && t.files[0]) t.files[0].text().then(txt => {
-    try { const s = JSON.parse(txt); if (s.version !== 1) throw 0; if (!confirm('Substituir os dados deste aparelho pelo backup?')) return; replaceState(s); render(); toast('Backup restaurado'); }
-    catch { toast('Arquivo de backup inválido'); }
+    let s;
+    try { s = JSON.parse(txt); if (s.version !== 1) throw 0; } catch { return toast('Arquivo de backup inválido'); }
+    confirmar('Restaurar o backup?', 'Os dados deste aparelho são substituídos pelos do arquivo.', 'Restaurar', () => { replaceState(s); render(); toast('Backup restaurado'); });
   });
 });
 

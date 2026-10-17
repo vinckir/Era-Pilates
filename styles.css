@@ -74,12 +74,14 @@ h1 em, h2 em, h3 em { font-style: italic; font-weight: 300; }
 #app { max-width: 620px; margin: 0 auto; padding: 0 16px 24px; }
 .top { padding: calc(14px + env(safe-area-inset-top)) 0 10px; display: flex; align-items: center; gap: 12px; }
 .top .grow { flex: 1; min-width: 0; }
-/* Logo original (os mesmos recortes do site): símbolo + palavra lado a lado, como no menu do erapilates.com.br.
-   Os PNGs servem de máscara e a cor vem da paleta, então o logo troca sozinho no modo escuro. */
-.brand { display: flex; align-items: center; gap: 10px; }
-.brand i { display: block; background: var(--accent); -webkit-mask: no-repeat center / contain; mask: no-repeat center / contain; }
-.brand .sym { height: 52px; aspect-ratio: 456 / 417; -webkit-mask-image: url(brand/logo-simbolo.png); mask-image: url(brand/logo-simbolo.png); }
-.brand .word { height: 40px; aspect-ratio: 556 / 371; -webkit-mask-image: url(brand/logo-palavra.png); mask-image: url(brand/logo-palavra.png); }
+/* Logo horizontal com as medidas aprovadas no "Ajuste do logo horizontal" do Brand Book:
+   símbolo = 89% da altura da palavra, distância = 14%, símbolo 10% acima do centro.
+   O desenho é o original (recortes do site, sem margem). Os PNGs servem de máscara e a cor vem da paleta,
+   então o logo troca sozinho no modo escuro. --h é a altura da palavra (mín. 50px = 130px de largura). */
+.brand { --h: 52px; display: flex; align-items: center; }
+.brand i { display: block; flex: none; background: var(--accent); -webkit-mask: no-repeat center / 100% 100%; mask: no-repeat center / 100% 100%; }
+.brand .sym { height: calc(var(--h) * .89); aspect-ratio: 441 / 402; transform: translateY(calc(var(--h) * -.10)); -webkit-mask-image: url(brand/logo-simbolo.png); mask-image: url(brand/logo-simbolo.png); }
+.brand .word { height: var(--h); aspect-ratio: 541 / 356; margin-left: calc(var(--h) * .14); -webkit-mask-image: url(brand/logo-palavra.png); mask-image: url(brand/logo-palavra.png); }
 .iconbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); box-shadow: var(--shadow); flex: none; }
 .iconbtn svg { width: 20px; height: 20px; }
 

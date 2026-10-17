@@ -17,6 +17,7 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - `styles.css`: tokens de marca no topo, tirados do **Brand Book v1** (`../Era Pilates BrandBook/brand/`), e modo escuro (fundo café, texto creme, rosé como acento).
 - `brand/`: logo **original** (símbolo e palavra, os mesmos recortes do site `Documentos/Era Pilates/Era Pilates Website/deploy/assets/`), usado como máscara CSS para a cor seguir o tema, e favicon do site. Ícones do app (`icon-*.png`): símbolo original creme sobre cacau.
   **Não usar os logos redesenhados do Brand Book** (pontas arredondadas, traço mais grosso): o Vinícius rejeitou. Do Brand Book vêm só cores, fontes e regras.
+  **Logo horizontal = medidas aprovadas pelo Vinícius** no `Ajuste Logo Horizontal.html` do Brand Book: símbolo com 89% da altura da palavra, distância de 14% e símbolo 10% acima do centro (`.brand` em `styles.css`, com `--h` = altura da palavra). Não inventar outra composição.
 - `js/exercicios.js`: base de 140 exercícios (`[id, nome, aparelho, nível, bloco, posição, foco, evitar, ajuda, origem, progressão, dica]`), mais BLOCOS, APARELHOS, RESTRICOES e OBJETIVOS.
 - `js/sugestao.js`: motor de sugestão local.
   - Segue a ordem clássica dos blocos.
@@ -40,6 +41,10 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - Peso máximo de fonte 500. Pedra (`--ink-3`) só para legendas de 14px ou mais. Cards 14px de raio, botões em pílula, sem sombras fortes nem gradientes.
 - Ícones de traço fino (1,5px), sem preenchimento. Área de toque mínima de 44px.
 - Tom de voz: frases curtas e serenas, falando com "você".
+
+## Regras de interface
+- Nada de `confirm()`/`alert()`/`prompt()`: dentro do claude.ai (moldura) e do painel do app eles não aparecem. Usar `confirmar()` (folha na própria tela).
+- Tela *Mais* sem código, JSON ou formato técnico à vista: a Jessica só escolhe os arquivos do Seu Fisio.
 
 ## Regras de negócio já decididas
 - Cada aula tem **1 ou 2 alunos** (dupla). No Seu Fisio, a dupla é feita de dois atendimentos separados no mesmo horário. Na importação, o app junta quem tem o mesmo data+hora.
