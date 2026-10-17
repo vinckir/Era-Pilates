@@ -23,6 +23,7 @@ const I = {
   spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></svg>',
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
+  zap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l1.2-3.9A8 8 0 1 1 8.6 18.4z"/><path d="M9.2 8.6c.2-.5.5-.6.8-.6h.5c.2 0 .4.1.5.4l.6 1.5c.1.2 0 .5-.1.6l-.5.6c.6 1.2 1.6 2.2 2.8 2.8l.6-.5c.2-.2.4-.2.6-.1l1.5.6c.3.1.4.3.4.5v.5c0 .3-.1.6-.6.8-.6.3-1.4.4-2.4 0-2.2-.8-3.9-2.5-4.7-4.7-.4-1-.3-1.8 0-2.4z"/></svg>',
   swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4L4 7l3 3M4 7h12M17 20l3-3-3-3M20 17H8"/></svg>',
 };
 
@@ -438,14 +439,46 @@ const somaLanc = ls => ls.reduce((s, l) => s + (l.valor || 0), 0);
 const mesAnterior = m => addDias(m + '-01', -1).slice(0, 7);
 const mesSeguinte = m => addDias(m + '-01', 32).slice(0, 7);
 
+// ——— Cobrança pelo WhatsApp: abre a conversa da cliente com a mensagem pronta ———
+const foneWa = t => { const d = (t || '').replace(/\D/g, ''); return d.length >= 12 && d.startsWith('55') ? d : d.length >= 10 ? '55' + d : ''; };
+const podeCobrar = l => l.tipo === 'receber' && !l.pagoEm && !!foneWa(cliente(l.clienteId)?.telefone);
+
+function mensagemCobranca(l) {
+  const c = cliente(l.clienteId);
+  const [ano, mes] = l.vencimento.split('-');
+  const ref = ehMensalidade(l.descricao) ? `a mensalidade do Pilates de ${MESES[+mes - 1]} (${l.descricao})` : `o atendimento de ${l.descricao || 'Pilates'}`;
+  const quando = situacaoLanc(l) === 'atrasado' ? `venceu em ${dataCurta(l.vencimento)}` : `vence em ${dataCurta(l.vencimento)}`;
+  const pix = state.settings.pix ? `\n\nChave PIX: ${state.settings.pix}` : '';
+  return `Oi, ${primeiro(c?.nome)}! Tudo bem? Passando para lembrar ${ref}, no valor de ${brl(l.valor)}, que ${quando}.${pix}\n\n`
+    + `${situacaoLanc(l) === 'atrasado' ? 'Se já pagou, pode desconsiderar. ' : ''}Obrigada!\n${state.settings.assinatura || 'Jessica · ERA Pilates'}`;
+}
+const linkWa = (l, texto = mensagemCobranca(l)) => `https://wa.me/${foneWa(cliente(l.clienteId)?.telefone)}?text=${encodeURIComponent(texto)}`;
+
+function sheetCobrar(id) {
+  const l = state.lancamentos.find(x => x.id === id);
+  const c = cliente(l.clienteId);
+  sheet(`<h2>Cobrar ${esc(primeiro(c.nome))}</h2>
+    <p class="muted">${esc(l.descricao)} · ${brl(l.valor)} · ${situacaoLanc(l) === 'atrasado' ? 'venceu' : 'vence'} em ${dataCurta(l.vencimento)}</p>
+    ${state.settings.pix ? '' : '<div class="alert" style="margin-bottom:10px">Sem chave PIX na mensagem. Cadastre em Mais → Cobrança.</div>'}
+    <label class="field"><span>Mensagem (dá para ajustar antes de enviar)</span><textarea id="cbTxt" style="min-height:190px;padding-right:14px">${esc(mensagemCobranca(l))}</textarea></label>
+    <a class="zap btn block" id="cbIr" href="${linkWa(l)}" target="_blank" rel="noopener" style="margin-top:14px;justify-content:center">${I.zap} Abrir no WhatsApp</a>
+    ${l.cobradoEm ? `<p class="tiny" style="text-align:center;margin-top:10px">Última cobrança em ${dataCurta(l.cobradoEm)}</p>` : ''}`, el => {
+    const ta = el.querySelector('#cbTxt'), ir = el.querySelector('#cbIr');
+    ta.addEventListener('input', () => { ir.href = linkWa(l, ta.value); });
+    ir.addEventListener('click', () => { l.cobradoEm = hoje(); save(); setTimeout(() => { closeSheet(); render(); toast('Cobrança aberta no WhatsApp'); }, 300); });
+  });
+}
+
 function linhaLanc(l, comNome = true) {
   const st = situacaoLanc(l);
   const chip = st === 'pago' ? `<span class="chip sage">Paga ${dataCurta(l.pagoEm)}</span>` : st === 'atrasado' ? '<span class="chip warn">Atrasada</span>' : '<span class="chip">Aberta</span>';
-  return `<button class="lanc ${st}" data-act="lanc" data-id="${l.id}">
+  const cobrada = !l.pagoEm && l.cobradoEm ? ` · cobrada ${dataCurta(l.cobradoEm)}` : '';
+  const linha = `<button class="lanc ${st}" data-act="lanc" data-id="${l.id}">
     <div><div class="nome">${esc(comNome ? l.nome : l.descricao)}</div>
-      <div class="tiny">${esc(comNome ? l.descricao : '')}${comNome ? ' · ' : ''}vence ${dataCurta(l.vencimento)}${l.vencimento.slice(0, 4) !== hoje().slice(0, 4) ? '/' + l.vencimento.slice(2, 4) : ''}</div></div>
+      <div class="tiny">${esc(comNome ? l.descricao : '')}${comNome ? ' · ' : ''}vence ${dataCurta(l.vencimento)}${l.vencimento.slice(0, 4) !== hoje().slice(0, 4) ? '/' + l.vencimento.slice(2, 4) : ''}${cobrada}</div></div>
     <div class="valor"><span>${brl(l.valor)}</span><br>${chip}</div>
   </button>`;
+  return podeCobrar(l) ? `<div class="lanc-linha">${linha}<button class="zap" data-act="cobrar" data-id="${l.id}" aria-label="Cobrar no WhatsApp">${I.zap}</button></div>` : linha;
 }
 
 function vFinanceiro() {
@@ -510,7 +543,8 @@ function sheetLanc(id) {
       <label class="field" style="flex:1;margin:0"><span>Valor (R$)</span><input type="number" id="lcValor" step="0.01" inputmode="decimal" value="${l.valor}"></label>
     </div>
     <label class="field"><span>Forma</span><select id="lcForma">${FORMAS.map(f => `<option ${f === (l.forma || 'PIX') ? 'selected' : ''}>${f}</option>`).join('')}</select></label>
-    <button class="btn primary block" id="lcQuita" style="margin-top:14px">${I.check} Quitar</button>`}
+    <button class="btn primary block" id="lcQuita" style="margin-top:14px">${I.check} Quitar</button>
+    ${podeCobrar(l) ? `<button class="btn ghost block" data-act="cobrar" data-id="${l.id}" style="margin-top:8px">${I.zap} Cobrar no WhatsApp</button>` : ''}`}
     <div style="text-align:center;margin-top:12px"><button class="linkbtn" id="lcExclui">Excluir esta conta</button></div>`, el => {
     el.querySelector('#lcQuita')?.addEventListener('click', () => {
       Object.assign(l, { pagoEm: el.querySelector('#lcData').value || hoje(), valor: +el.querySelector('#lcValor').value || l.valor, forma: el.querySelector('#lcForma').value, editado: true });
@@ -677,6 +711,11 @@ function vMais() {
     ${Object.entries(APARELHOS).map(([k, t]) => `<div class="toggle"><span>${t}</span><button class="switch ${ap[k] !== false ? 'on' : ''}" data-act="ap" data-k="${k}" aria-label="${t}"></button></div>`).join('')}
     <div class="toggle"><span>Sugerir só exercícios aprovados<br><span class="tiny">Desligado: usa também os que ainda estão “a revisar”</span></span>
       <button class="switch ${state.settings.soBase ? 'on' : ''}" data-act="soBase" aria-label="Só aprovados"></button></div>
+  </div>
+
+  <div class="section"><span class="eyebrow">Cobrança</span>
+    <label class="field"><span>Chave PIX (vai na mensagem de cobrança)</span><input type="text" id="cfgPix" value="${esc(state.settings.pix || '')}" placeholder="CNPJ, e-mail, telefone ou chave aleatória"></label>
+    <label class="field"><span>Assinatura</span><input type="text" id="cfgAss" value="${esc(state.settings.assinatura || 'Jessica · ERA Pilates')}"></label>
   </div>
 
   <div class="section"><span class="eyebrow">Importar do Seu Fisio</span>
@@ -1239,6 +1278,7 @@ const acoes = {
   },
   'add-hr': el => sheetHorario(el.dataset.c),
   lanc: el => sheetLanc(el.dataset.id),
+  cobrar: el => sheetCobrar(el.dataset.id),
   'nova-conta': el => sheetNovaConta(el.dataset.c || null),
   'fin-mes': el => { ui.finMes = el.dataset.m; render(); },
   'fin-tipo': el => { ui.finTipo = el.dataset.v; render(); },
@@ -1364,6 +1404,8 @@ document.addEventListener('input', ev => {
   if (t.id === 'exQ') { ui.exFiltro.q = t.value; const pos = t.selectionStart; render(); const n = document.getElementById('exQ'); n.focus(); n.setSelectionRange(pos, pos); }
   if (t.id === 'nota') { const a = state.aulas.find(x => x.id === t.dataset.a); a.notas = a.notas || {}; a.notas[t.dataset.c] = t.value; saveSoon(); }
   if (t.id === 'obsCli') { cliente(t.dataset.c).obs = t.value; saveSoon(); }
+  if (t.id === 'cfgPix') { state.settings.pix = t.value.trim(); saveSoon(); }
+  if (t.id === 'cfgAss') { state.settings.assinatura = t.value.trim(); saveSoon(); }
   if (t.id === 'exNota') { state.exOverrides[t.dataset.id] = { ...(state.exOverrides[t.dataset.id] || {}), nota: t.value }; saveSoon(); }
 });
 

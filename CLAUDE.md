@@ -59,7 +59,8 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - Quitar, desfazer e excluir em folha; conta mexida no app ganha `editado` e a reimportação não sobrescreve.
 - Mensalidades: `gerarMensalidades()` lança a do mês atual e a do próximo para cada plano "N x semana" com valor, no dia do início do plano. Se o Seu Fisio já lançou a mesma mensalidade, vale a dele. Mensalidade excluída vira `excecoesFin` e não volta.
 - Conferido em 17/10/2026: totais iguais aos relatórios do Seu Fisio (R$ 175.720,00 a receber e R$ 155.198,99 a pagar) e ao fluxo de caixa de outubro.
-- Ainda não tem: despesas recorrentes automáticas (aluguel, Ceee...), recibo, cobrança por WhatsApp, fluxo de caixa por período.
+- Cobrança pelo WhatsApp: botão nas contas a receber abertas de cliente com telefone (lista, folha da conta e ficha). Abre `wa.me` com a mensagem pronta (mês, plano, valor, vencimento, chave PIX de `settings.pix` e assinatura de `settings.assinatura`, ambas em *Mais → Cobrança*); a mensagem pode ser ajustada antes. Grava `cobradoEm`.
+- Ainda não tem: despesas recorrentes automáticas (aluguel, Ceee...), recibo, fluxo de caixa por período.
 
 ## Regras de interface
 - Nada de `confirm()`/`alert()`/`prompt()`: dentro do claude.ai (moldura) e do painel do app eles não aparecem. Usar `confirmar()` (folha na própria tela).

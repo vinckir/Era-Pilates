@@ -1,5 +1,5 @@
 // Cache simples para o app abrir mesmo sem internet no estúdio.
-const CACHE = 'era-pilates-v8';
+const CACHE = 'era-pilates-v9';
 const ARQUIVOS = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'icon-180.png', 'icon-192.png', 'icon-512.png', 'brand/logo-simbolo.png', 'brand/logo-palavra.png', 'brand/favicon-32.png',
