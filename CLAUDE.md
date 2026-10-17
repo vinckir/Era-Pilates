@@ -37,7 +37,7 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - `js/xlsx.js`: leitor de .xlsx sem biblioteca (DecompressionStream + DOMParser), para importar as planilhas do Seu Fisio direto, inclusive no celular.
 
 ## Modelo de dados (localStorage)
-`{ version:1, settings:{aparelhos, soBase}, exOverrides:{[exId]:{status,nota,video,foto,adiado}}, exCustom:[], clientes:[{id,nome,nivel,objetivos[],restricoes[{tag,desde,temporaria}],obs,favoritos[],inativo,soMassagem,telefone,plano,ultimoAtendimento,horarios[{dow,hora}],matricula,genero,cpf,nascimento,profissao,email,endereco,clienteDesde,cadastroEm,autorizaImagem,reposicoes,valorMensal,inicioPlano,fimPlano,inativoManual}], aulas:[{id,data,hora,clientes[≤2],status:'agendada'|'planejada'|'realizada',planos:{[clienteId]:{itens:[{exId,motivo,feito,fb}],aprovado}},notas:{[clienteId]:texto},presenca:{[clienteId]:'falta'|'justificada'},origem:'manual'|'importada'|'fixo'|'exemplo'}], excecoes:[{c,data,hora}], lancamentos:[{id,tipo:'receber'|'pagar',clienteId,nome,descricao,categoria,centro,forma,vencimento,pagoEm,valor,origem:'seufisio'|'app'|'mensalidade',ref,editado}], excecoesFin:[{c,m}] }`
+`{ version:1, settings:{aparelhos, soBase}, exOverrides:{[exId]:{status,nota,video,foto,adiado}}, exCustom:[], clientes:[{id,nome,nivel,objetivos[],restricoes[{tag,desde,temporaria}],obs,favoritos[],inativo,soMassagem,telefone,plano,ultimoAtendimento,horarios[{dow,hora}],matricula,genero,cpf,nascimento,profissao,email,endereco,clienteDesde,cadastroEm,autorizaImagem,reposicoes,valorMensal,inicioPlano,fimPlano,inativoManual}], aulas:[{id,data,hora,clientes[≤2],status:'agendada'|'planejada'|'realizada',planos:{[clienteId]:{itens:[{exId,motivo,feito,fb}],aprovado}},notas:{[clienteId]:texto},presenca:{[clienteId]:'falta'|'justificada'},origem:'manual'|'importada'|'fixo'|'exemplo'}], excecoes:[{c,data,hora}], lancamentos:[{id,tipo:'receber'|'pagar',clienteId,nome,descricao,categoria,centro,forma,vencimento,pagoEm,valor,origem:'seufisio'|'app'|'mensalidade',ref,editado}], excecoesFin:[{c,m}|{r,m}], recorrentes:[{id,nome,descricao,categoria,valor,dia,variavel,ativo}] }`. Aula importada do histórico também tem `sala`, `servico`, `ref` e `remarcacao:{[clienteId]:'dd/mm/aaaa hh:mm'}`.
 
 ## Regras da marca no app (Brand Book)
 - Usar só as cores dos tokens. Texto principal café, nunca preto. Botão principal cacau com texto creme (`--primary`).
@@ -51,6 +51,7 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - `clientes-seufisio-completo.xlsx`: Relatórios → Clientes → Geral, com as colunas marcadas (matrícula, CPF, nascimento, e-mail, endereço, profissão, cliente desde, uso de imagem, reposições). O cadastro no Seu Fisio é quase vazio (17/10/2026: 48 nascimentos, 26 CPFs, 31 endereços, 10 e-mails em 216).
 - `planos-fixos-erapilates.tsv`: Relatórios → Clientes → Planos Fixos (plano, valor mensal, início, fim, **horários programados**). É a fonte oficial dos horários fixos; vale mais que a detecção pela agenda.
 - `contas-receber-seufisio.xlsx` e `contas-pagar-seufisio.xlsx`: Relatórios → Conta a receber / Conta a pagar, vencimentos de 01/06/2025 a 31/12/2026. Viram `state.lancamentos` (chave `ref` = `sf-r-<Nº>` / `sf-p-<Nº>`, para reimportar sem duplicar).
+- `atendimentos-seufisio.xlsx`: Relatórios → Atendimentos gerais (01/01/2020 a 31/12/2026, colunas sala e OBS). Só o que já passou vira aula (`origem:'historico'`), agrupando por data + hora + sala; Sala Zen = massagem/drenagem, que não entra no motor de sugestões nem no planejamento. Em 17/10/2026: 1.659 aulas, de 03/06/2025 a 16/10/2026.
 - `agenda-erapilates.json`: aulas futuras.
 - Ordem na importação: clientes → planos → agenda. Situação mudada à mão no app (`inativoManual`) e “só massagem” (`soMassagem`) não são sobrescritas pela situação do Seu Fisio.
 
@@ -60,13 +61,17 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - Mensalidades: `gerarMensalidades()` lança a do mês atual e a do próximo para cada plano "N x semana" com valor, no dia do início do plano. Se o Seu Fisio já lançou a mesma mensalidade, vale a dele. Mensalidade excluída vira `excecoesFin` e não volta.
 - Conferido em 17/10/2026: totais iguais aos relatórios do Seu Fisio (R$ 175.720,00 a receber e R$ 155.198,99 a pagar) e ao fluxo de caixa de outubro.
 - Cobrança pelo WhatsApp: botão nas contas a receber abertas de cliente com telefone (lista, folha da conta e ficha). Abre `wa.me` com a mensagem pronta (mês, plano, valor, vencimento, chave PIX de `settings.pix` e assinatura de `settings.assinatura`, ambas em *Mais → Cobrança*); a mensagem pode ser ajustada antes. Grava `cobradoEm`.
-- Ainda não tem: despesas recorrentes automáticas (aluguel, Ceee...), recibo, fluxo de caixa por período.
+- Saídas agrupadas de forma mais simples que as categorias do Seu Fisio (`grupoDe`): contas fixas, impostos, variáveis e **retiradas da Jessica** (pró-labore e distribuição de lucros). O resumo separa despesas do estúdio de retiradas.
+- Contas fixas (`state.recorrentes`): detectadas uma vez pelo histórico (mesma descrição em 3 dos últimos 4 meses) e lançadas sozinhas no mês atual e no próximo; editáveis em *Financeiro → Contas fixas*. A conta do Seu Fisio no mesmo mês substitui a gerada.
+- Vista *Ano*: entradas, despesas, retiradas e resultado mês a mês; conferida com o diagnóstico de jul/2026 (2025: R$ 64.415 / R$ 60.400,08 / R$ 4.014,92).
+- Ainda não tem: recibo, NFS-e, cobrança automática (Asaas/PIX), conciliação bancária.
 
 ## Regras de interface
 - Nada de `confirm()`/`alert()`/`prompt()`: dentro do claude.ai (moldura) e do painel do app eles não aparecem. Usar `confirmar()` (folha na própria tela).
 - Tela *Mais* sem código, JSON ou formato técnico à vista: a Jessica só escolhe os arquivos do Seu Fisio.
 
 ## Agenda e horários fixos
+- Duas vistas: *Dia* (lista com cartões) e *Semana* (grade de horas × dias, cor por situação: marcada, plano pronto, realizada, falta, sem registro, massagem). Tocar no dia da grade abre a vista Dia.
 - `cliente.horarios` (dia da semana `dow`, 0 = domingo, e hora) vira aula toda semana: `gerarFixas()` cria as aulas da semana vista na agenda e das próximas semanas, a partir de hoje e depois de `settings.fixoDesde` (dia seguinte à última aula importada do Seu Fisio).
 - Na importação da agenda, `detectarFixos()` dá horário fixo a quem repete o mesmo dia e hora em semanas diferentes.
 - Tirar um cliente de uma aula fixa, mudar a data/hora ou remover a aula grava uma exceção (`state.excecoes`), para a aula não voltar.

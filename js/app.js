@@ -57,6 +57,8 @@ function statusAula(a) {
   return { cls: '', txt: 'Sem plano' };
 }
 
+const ehMassagem = a => /massagem|drenagem|reiki/i.test(a.servico || '') || a.sala === 'Sala Zen';
+
 function aulasDoDia(d) {
   return state.aulas.filter(a => a.data === d).sort((a, b) => a.hora.localeCompare(b.hora));
 }
@@ -82,7 +84,7 @@ function gerarFixas(ini, fim) {
       for (const h of c.horarios) {
         if (h.dow !== dow || temExcecao(c.id, d, h.hora)) continue;
         if (state.aulas.some(a => a.data === d && a.clientes.includes(c.id))) continue;
-        const a = state.aulas.find(x => x.data === d && x.hora === h.hora);
+        const a = state.aulas.find(x => x.data === d && x.hora === h.hora && !ehMassagem(x));
         if (a) { if (a.clientes.length < 2 && a.status !== 'realizada') { a.clientes.push(c.id); mudou = true; } }
         else { state.aulas.push({ id: uid('a'), data: d, hora: h.hora, clientes: [c.id], status: 'agendada', planos: {}, notas: {}, origem: 'fixo' }); mudou = true; }
       }
@@ -132,7 +134,7 @@ function vAgenda() {
   const semana = [...Array(7)].map((_, i) => addDias(ini, i));
   gerarFixas(ini, addDias(ini, 6));
   const aulas = aulasDoDia(d);
-  const pendentes = semana.filter(x => x >= t).flatMap(aulasDoDia).filter(a => a.status !== 'realizada' && a.clientes.some(c => !a.presenca?.[c] && !a.planos[c]?.itens?.length)).length;
+  const pendentes = semana.filter(x => x >= t).flatMap(aulasDoDia).filter(a => !ehMassagem(a) && a.status !== 'realizada' && a.clientes.some(c => !a.presenca?.[c] && !a.planos[c]?.itens?.length)).length;
 
   return `
   <header class="top">
@@ -141,6 +143,16 @@ function vAgenda() {
     </div>
     ${d !== t ? `<button class="btn small ghost" data-act="dia" data-d="${t}">Hoje</button>` : ''}
   </header>
+  <div class="seg vista">
+    <button class="${ui.vista !== 'semana' ? 'on' : ''}" data-act="vista" data-v="dia">Dia</button>
+    <button class="${ui.vista === 'semana' ? 'on' : ''}" data-act="vista" data-v="semana">Semana</button>
+  </div>
+  ${ui.vista === 'semana' ? `
+  <div class="fin-mes">
+    <button class="iconbtn" data-act="dia" data-d="${addDias(ini, -7)}" aria-label="Semana anterior">${I.back}</button>
+    <h2 style="flex:1">${tituloSemana(ini)}</h2>
+    <button class="iconbtn" data-act="dia" data-d="${addDias(ini, 7)}" aria-label="Próxima semana">${I.next}</button>
+  </div>` : `
   <p class="eyebrow">${d === t ? 'Hoje' : d < t ? 'Dia passado' : 'Próximo'}</p>
   <h1>${dataLonga(d)}</h1>
 
@@ -153,17 +165,49 @@ function vAgenda() {
         <span class="dots">${'<i></i>'.repeat(Math.min(n, 4))}</span></button>`;
     }).join('')}
     <button class="nav" data-act="dia" data-d="${addDias(ini, 7)}" aria-label="Próxima semana">${I.next}</button>
-  </div>
+  </div>`}
 
   ${pendentes ? `<div class="card flat row between" style="margin-bottom:14px">
       <div><b>${pendentes} aula${pendentes > 1 ? 's' : ''}</b> <span class="muted">sem plano nesta semana</span></div>
       <button class="btn small accent" data-act="planejar-semana" data-d="${ini}">${I.spark} Planejar semana</button>
     </div>` : ''}
 
-  ${aulas.length ? aulas.map(cardAula).join('') : `
+  ${ui.vista === 'semana' ? gradeSemana(ini) : aulas.length ? aulas.map(cardAula).join('') : `
     <div class="empty"><h2>Dia livre</h2><p>Nenhuma aula neste dia. Toque em + para adicionar.</p></div>`}
 
   <button class="fab" data-act="nova-aula" aria-label="Nova aula">${I.plus}</button>`;
+}
+
+function tituloSemana(ini) {
+  const a = parseIso(ini), b = parseIso(addDias(ini, 6));
+  return a.getMonth() === b.getMonth() ? `${a.getDate()} a ${b.getDate()} de ${MESES[b.getMonth()]}` : `${a.getDate()} de ${MESES[a.getMonth()]} a ${b.getDate()} de ${MESES[b.getMonth()]}`;
+}
+
+function corAula(a) {
+  if (ehMassagem(a)) return 'zen';
+  const st = statusAula(a).cls;
+  if (st === 'falta') return 'falta';
+  if (st === 'realizada') return 'feita';
+  if (a.data < hoje()) return 'pendente';
+  return st === 'aprovada' || st === 'planejada' ? 'planejada' : 'marcada';
+}
+
+// Semana em grade: dias nas colunas, horas nas linhas, cada aula colorida pela situação.
+function gradeSemana(ini) {
+  const dias = [...Array(7)].map((_, i) => addDias(ini, i)).filter((x, i) => i < 6 || aulasDoDia(x).length);
+  const horas = dias.flatMap(aulasDoDia).map(a => +a.hora.slice(0, 2));
+  const h0 = Math.min(7, ...horas), h1 = Math.max(19, ...horas);
+  const bloco = a => `<a class="g-aula ${corAula(a)}" href="#/aula/${a.id}">${a.hora.slice(3) !== '00' ? `<small>${a.hora}</small>` : ''}${a.clientes.map(c => `<span>${esc(primeiro(cliente(c)?.nome) || '—')}</span>`).join('')}</a>`;
+  let linhas = '';
+  for (let h = h0; h <= h1; h++) {
+    linhas += `<div class="g-hora">${h}h</div>` + dias.map(x => `<div class="g-cel">${aulasDoDia(x).filter(a => +a.hora.slice(0, 2) === h).map(bloco).join('')}</div>`).join('');
+  }
+  const leg = [['marcada', 'Marcada'], ['planejada', 'Plano pronto'], ['feita', 'Realizada'], ['falta', 'Falta'], ['pendente', 'Sem registro'], ['zen', 'Massagem']];
+  return `<div class="grade" style="grid-template-columns:30px repeat(${dias.length}, minmax(0, 1fr))">
+    <div></div>${dias.map(x => { const dd = parseIso(x); return `<button class="g-dia ${x === hoje() ? 'today' : ''}" data-act="dia-lista" data-d="${x}">${DIAS[dd.getDay()].slice(0, 3)}<b>${dd.getDate()}</b></button>`; }).join('')}
+    ${linhas}
+  </div>
+  <div class="g-legenda">${leg.map(([k, t]) => `<span><i class="g-aula ${k}" style="padding:0"></i>${t}</span>`).join('')}</div>`;
 }
 
 function cardAula(a) {
@@ -176,7 +220,7 @@ function cardAula(a) {
     <div class="hora">${a.hora}</div>
     <div>
       <div class="nomes">${esc(nomes)}</div>
-      <div class="meta">${st.txt}${faltas.length && faltas.length < a.clientes.length ? ` · ${esc(faltas.join(', '))} faltou` : ''}${n ? ` · ${n} exerc.` : ''}${restr.length ? ` · <span style="color:var(--warn)">${esc([...new Set(restr)].join(', '))}</span>` : ''}</div>
+      <div class="meta">${ehMassagem(a) ? esc(a.servico || 'Massagem') + ' · ' : ''}${st.txt}${faltas.length && faltas.length < a.clientes.length ? ` · ${esc(faltas.join(', '))} faltou` : ''}${n ? ` · ${n} exerc.` : ''}${restr.length ? ` · <span style="color:var(--warn)">${esc([...new Set(restr)].join(', '))}</span>` : ''}</div>
     </div>
     <span class="status ${st.cls}"></span>
   </a>`;
@@ -194,6 +238,7 @@ function vAula(id) {
   const exs = exMap();
   const feita = a.status === 'realizada';
   const falta = a.presenca?.[alunoId];
+  const massagem = ehMassagem(a);
   const outro = a.clientes.find(x => x !== alunoId);
   const ult = historico(state, alunoId, a.data)[0];
   const ultNota = ult?.notas?.[alunoId];
@@ -226,7 +271,9 @@ function vAula(id) {
   </div>
 
   <div class="section">
-    ${falta ? `<div class="card flat empty" style="padding:24px 16px"><h2>${falta === 'justificada' ? 'Falta avisada' : 'Falta'}</h2>
+    ${massagem ? `<div class="card flat empty" style="padding:24px 16px"><h2>${esc(a.servico || 'Massagem')}</h2><p>Atendimento na ${esc(a.sala || 'Sala Zen')}.</p></div>`
+    : falta ? `<div class="card flat empty" style="padding:24px 16px"><h2>${falta === 'justificada' ? 'Falta avisada' : 'Falta'}</h2>
+      ${a.remarcacao?.[alunoId] ? `<p>Remarcada para ${esc(a.remarcacao[alunoId])}.</p>` : ''}
       <p>Não entra no histórico de exercícios de ${esc(primeiro(c.nome))}.</p></div>`
     : plano?.itens?.length ? `
       <div class="row between">
@@ -481,8 +528,27 @@ function linhaLanc(l, comNome = true) {
   return podeCobrar(l) ? `<div class="lanc-linha">${linha}<button class="zap" data-act="cobrar" data-id="${l.id}" aria-label="Cobrar no WhatsApp">${I.zap}</button></div>` : linha;
 }
 
+// Grupos de despesa mais simples que as categorias do Seu Fisio (a categoria original continua guardada).
+const GRUPOS = [['fixas', 'Contas fixas'], ['impostos', 'Impostos'], ['variaveis', 'Variáveis'], ['retiradas', 'Retiradas da Jessica']];
+const grupoDe = l => /pr[óo]-?labore|distribui|retirada|sal[áa]rio/i.test(l.categoria + ' ' + l.descricao) ? 'retiradas'
+  : /imposto/i.test(l.categoria) || /inss|simples|darf|das\b|iss\b/i.test(l.descricao) ? 'impostos'
+  : /fixa/i.test(l.categoria) || /aluguel|ceee|energia|[áa]gua|internet|contador|honor[áa]rio|seufisio|software/i.test(l.descricao + ' ' + l.nome) ? 'fixas' : 'variaveis';
+const ehRetirada = l => l.tipo === 'pagar' && grupoDe(l) === 'retiradas';
+
 function vFinanceiro() {
   gerarMensalidades();
+  gerarRecorrentes();
+  const vista = ui.finVista || 'mes';
+  const seg = `<div class="seg vista">
+    <button class="${vista === 'mes' ? 'on' : ''}" data-act="fin-vista" data-v="mes">Mês</button>
+    <button class="${vista === 'ano' ? 'on' : ''}" data-act="fin-vista" data-v="ano">Ano</button></div>`;
+  const topo = `<header class="top"><div class="grow"><p class="eyebrow">Financeiro</p></div>
+    <button class="btn small ghost" data-act="recorrentes">Contas fixas</button>
+    <button class="btn small" data-act="nova-conta">${I.plus} Conta</button></header>${seg}`;
+  return topo + (vista === 'ano' ? finAno() : finMes());
+}
+
+function finMes() {
   const m = ui.finMes || hoje().slice(0, 7);
   const tipo = ui.finTipo || 'receber';
   const L = state.lancamentos;
@@ -490,15 +556,20 @@ function vFinanceiro() {
   const abertosNoMes = t => L.filter(l => l.tipo === t && !l.pagoEm && l.vencimento.slice(0, 7) === m);
   const recebido = somaLanc(pagosNoMes('receber')), pago = somaLanc(pagosNoMes('pagar'));
   const aReceber = somaLanc(abertosNoMes('receber')), aPagar = somaLanc(abertosNoMes('pagar'));
+  const retiradas = somaLanc(pagosNoMes('pagar').filter(ehRetirada));
   const atrasadas = L.filter(l => l.tipo === 'receber' && situacaoLanc(l) === 'atrasado');
   const porCentro = c => somaLanc(pagosNoMes('receber').filter(l => l.centro === c));
   const ordem = { atrasado: 0, aberto: 1, pago: 2 };
-  const lista = [...abertosNoMes(tipo), ...pagosNoMes(tipo)].sort((a, b) => ordem[situacaoLanc(a)] - ordem[situacaoLanc(b)]
+  const ordenar = ls => ls.sort((a, b) => ordem[situacaoLanc(a)] - ordem[situacaoLanc(b)]
     || (situacaoLanc(a) === 'pago' ? b.pagoEm.localeCompare(a.pagoEm) : a.vencimento.localeCompare(b.vencimento)));
+  const lista = ordenar([...abertosNoMes(tipo), ...pagosNoMes(tipo)]);
   const [ano, mes] = m.split('-');
+  const listaHtml = tipo === 'receber' ? lista.map(l => linhaLanc(l)).join('')
+    : GRUPOS.map(([g, nome]) => {
+      const ls = lista.filter(l => grupoDe(l) === g);
+      return ls.length ? `<div class="bloco"><div class="eyebrow">${nome} · ${brl(somaLanc(ls))}</div>${ls.map(l => linhaLanc(l)).join('')}</div>` : '';
+    }).join('');
   return `
-  <header class="top"><div class="grow"><p class="eyebrow">Financeiro</p></div>
-    <button class="btn small" data-act="nova-conta">${I.plus} Conta</button></header>
   <div class="fin-mes">
     <button class="iconbtn" data-act="fin-mes" data-m="${mesAnterior(m)}" aria-label="Mês anterior">${I.back}</button>
     <h1>${MESES[+mes - 1][0].toUpperCase() + MESES[+mes - 1].slice(1)} <em>${ano}</em></h1>
@@ -511,14 +582,142 @@ function vFinanceiro() {
     <div class="stat"><b>${brl(pago)}</b><span>Pago</span></div>
     <div class="stat"><b>${brl(aPagar)}</b><span>A pagar</span></div>
   </div>
-  <p class="tiny fin-centros">Saldo do mês ${brl(recebido - pago)} · Pilates ${brl(porCentro('Pilates'))} · Massagem e drenagem ${brl(porCentro('Fisioterapia'))}</p>
+  <p class="tiny fin-centros">Despesas do estúdio ${brl(pago - retiradas)} · Retiradas ${brl(retiradas)} · Saldo ${brl(recebido - pago)}</p>
+  <p class="tiny">Pilates ${brl(porCentro('Pilates'))} · Massagem e drenagem ${brl(porCentro('Fisioterapia'))}</p>
   ${atrasadas.length ? `<div class="alert" style="margin-top:12px"><b>${atrasadas.length} conta${atrasadas.length > 1 ? 's' : ''} atrasada${atrasadas.length > 1 ? 's' : ''}</b> · ${brl(somaLanc(atrasadas))}${atrasadas.some(l => l.vencimento.slice(0, 7) !== m) ? ' (inclui meses anteriores)' : ''}</div>` : ''}
 
   <div class="seg section">
     <button class="${tipo === 'receber' ? 'on' : ''}" data-act="fin-tipo" data-v="receber">Entradas</button>
     <button class="${tipo === 'pagar' ? 'on' : ''}" data-act="fin-tipo" data-v="pagar">Saídas</button>
   </div>
-  <div style="margin-top:6px">${lista.map(l => linhaLanc(l)).join('') || `<div class="empty"><p>Nenhuma ${tipo === 'receber' ? 'entrada' : 'saída'} neste mês.</p></div>`}</div>`;
+  <div style="margin-top:6px">${listaHtml || `<div class="empty"><p>Nenhuma ${tipo === 'receber' ? 'entrada' : 'saída'} neste mês.</p></div>`}</div>`;
+}
+
+// Resumo do ano: entradas, despesas do estúdio e retiradas, mês a mês (pela data de pagamento).
+function finAno() {
+  const ano = ui.finAno || hoje().slice(0, 4);
+  const pagos = state.lancamentos.filter(l => l.pagoEm && l.pagoEm.startsWith(ano));
+  const meses = [...Array(12)].map((_, i) => {
+    const m = `${ano}-${String(i + 1).padStart(2, '0')}`;
+    const ls = pagos.filter(l => l.pagoEm.slice(0, 7) === m);
+    const ent = somaLanc(ls.filter(l => l.tipo === 'receber')), ret = somaLanc(ls.filter(ehRetirada));
+    const desp = somaLanc(ls.filter(l => l.tipo === 'pagar')) - ret;
+    return { m, i, ent, desp, ret, res: ent - desp - ret };
+  });
+  const tot = k => meses.reduce((s, x) => s + x[k], 0);
+  const usados = meses.filter(x => x.ent || x.desp || x.ret);
+  const porGrupo = GRUPOS.map(([g, nome]) => [nome, somaLanc(pagos.filter(l => l.tipo === 'pagar' && grupoDe(l) === g))]);
+  const porCentro = c => somaLanc(pagos.filter(l => l.tipo === 'receber' && l.centro === c));
+  const anos = [...new Set(state.lancamentos.map(l => (l.pagoEm || l.vencimento).slice(0, 4)))].sort();
+  const n = usados.length || 1;
+  return `
+  <div class="fin-mes">
+    <button class="iconbtn" data-act="fin-ano" data-a="${+ano - 1}" aria-label="Ano anterior" ${anos[0] >= ano ? 'disabled' : ''}>${I.back}</button>
+    <h1><em>${ano}</em></h1>
+    <button class="iconbtn" data-act="fin-ano" data-a="${+ano + 1}" aria-label="Próximo ano" ${anos[anos.length - 1] <= ano ? 'disabled' : ''}>${I.next}</button>
+  </div>
+  <div class="stats fin section">
+    <div class="stat"><b>${brl(tot('ent'))}</b><span>Entradas</span></div>
+    <div class="stat"><b>${brl(tot('desp'))}</b><span>Despesas do estúdio</span></div>
+    <div class="stat"><b>${brl(tot('ret'))}</b><span>Retiradas da Jessica</span></div>
+    <div class="stat"><b>${brl(tot('res'))}</b><span>Ficou na empresa</span></div>
+  </div>
+  <p class="tiny fin-centros">Média por mês: entra ${brl(tot('ent') / n)}, sai ${brl(tot('desp') / n)} de despesas · Pilates ${brl(porCentro('Pilates'))} · Massagem e drenagem ${brl(porCentro('Fisioterapia'))}</p>
+
+  <div class="section"><span class="eyebrow">Mês a mês</span>
+    <table class="tabela">
+      <thead><tr><th>Mês</th><th>Entradas</th><th>Despesas</th><th>Retiradas</th><th>Resultado</th></tr></thead>
+      <tbody>${usados.map(x => `<tr data-act="fin-ir-mes" data-m="${x.m}"><td>${MESES_CURTOS[x.i]}</td><td>${brl(x.ent)}</td><td>${brl(x.desp)}</td><td>${brl(x.ret)}</td><td class="${x.res < 0 ? 'neg' : ''}">${brl(x.res)}</td></tr>`).join('')}</tbody>
+    </table>
+  </div>
+
+  <div class="section"><span class="eyebrow">Saídas por grupo</span>
+    ${porGrupo.filter(([, v]) => v).map(([nome, v]) => `<div class="row between" style="padding:7px 0;border-bottom:1px solid var(--line)"><span>${nome}</span><span>${brl(v)}</span></div>`).join('')}
+  </div>`;
+}
+
+// ——— Contas fixas (recorrentes): lançadas sozinhas no mês atual e no próximo ———
+// state.recorrentes = [{ id, nome, descricao, categoria, valor, dia, variavel, ativo }]
+function detectarRecorrentes() {
+  state.settings.recorrentesDetectados = true;
+  const m0 = hoje().slice(0, 7);
+  const ultimos = [1, 2, 3, 4].map(k => { let m = m0; for (let i = 0; i < k; i++) m = mesAnterior(m); return m; });
+  const pagar = state.lancamentos.filter(l => l.tipo === 'pagar' && !ehRetirada(l));
+  const porDesc = {};
+  pagar.forEach(l => { (porDesc[chaveNome(l.descricao)] ||= []).push(l); });
+  for (const ls of Object.values(porDesc)) {
+    const meses = new Set(ls.map(l => l.vencimento.slice(0, 7)).filter(m => ultimos.includes(m)));
+    if (meses.size < 3) continue;
+    const ult = ls.sort((a, b) => b.vencimento.localeCompare(a.vencimento))[0];
+    const vals = new Set(ls.slice(0, 4).map(l => l.valor));
+    if (state.recorrentes.some(r => chaveNome(r.descricao) === chaveNome(ult.descricao))) continue;
+    state.recorrentes.push({ id: uid('r'), nome: ult.nome, descricao: ult.descricao, categoria: ult.categoria, valor: ult.valor, dia: +ult.vencimento.slice(8), variavel: vals.size > 1, ativo: true });
+  }
+  save();
+}
+
+function gerarRecorrentes() {
+  const m0 = hoje().slice(0, 7), m1 = mesSeguinte(m0);
+  let mudou = false;
+  for (const r of state.recorrentes) {
+    if (!r.ativo) continue;
+    for (const m of [m0, m1]) {
+      if (state.excecoesFin.some(e => e.r === r.id && e.m === m)) continue;
+      if (state.lancamentos.some(l => l.tipo === 'pagar' && chaveNome(l.descricao) === chaveNome(r.descricao) && l.vencimento.slice(0, 7) === m)) continue;
+      const ultimo = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate();
+      state.lancamentos.push({ id: uid('f'), tipo: 'pagar', clienteId: null, nome: r.nome || r.descricao, descricao: r.descricao, categoria: r.categoria, centro: '', forma: '',
+        vencimento: `${m}-${String(Math.min(r.dia || 10, ultimo)).padStart(2, '0')}`, pagoEm: '', valor: r.valor, origem: 'recorrente', recorrenteId: r.id });
+      mudou = true;
+    }
+  }
+  if (mudou) save();
+}
+
+function sheetRecorrentes() {
+  const linha = r => `<div class="toggle"><span><b style="font-weight:500">${esc(r.descricao)}</b><br><span class="tiny">${esc(r.nome || '')}${r.nome ? ' · ' : ''}dia ${r.dia} · ${r.variavel ? 'cerca de ' : ''}${brl(r.valor)}</span></span>
+    <span class="row" style="flex-wrap:nowrap"><button class="linkbtn" data-rec-edit="${r.id}">Editar</button><button class="switch ${r.ativo ? 'on' : ''}" data-rec-on="${r.id}" aria-label="Ativa"></button></span></div>`;
+  sheet(`<h2>Contas fixas</h2>
+    <p class="muted">Entram sozinhas em Saídas todo mês, no dia de vencimento. Conta de valor variável entra com o último valor; ajuste ao pagar.</p>
+    ${state.recorrentes.map(linha).join('') || '<p class="muted">Nenhuma conta fixa ainda.</p>'}
+    <button class="btn block" data-rec-edit="" style="margin-top:14px">${I.plus} Nova conta fixa</button>`, el => {
+    el.querySelectorAll('[data-rec-on]').forEach(b => b.addEventListener('click', () => {
+      const r = state.recorrentes.find(x => x.id === b.dataset.recOn); r.ativo = !r.ativo;
+      if (!r.ativo) state.lancamentos = state.lancamentos.filter(l => !(l.recorrenteId === r.id && !l.pagoEm && l.vencimento >= hoje().slice(0, 7)));
+      save(); b.classList.toggle('on', r.ativo);
+    }));
+    el.querySelectorAll('[data-rec-edit]').forEach(b => b.addEventListener('click', () => sheetRecorrente(b.dataset.recEdit)));
+  });
+}
+
+function sheetRecorrente(id) {
+  const r = state.recorrentes.find(x => x.id === id) || { id: uid('r'), nome: '', descricao: '', categoria: 'Fixa', valor: '', dia: 10, variavel: false, ativo: true, nova: true };
+  sheet(`<h2>${r.nova ? 'Nova conta fixa' : esc(r.descricao)}</h2>
+    <label class="field"><span>Descrição</span><input type="text" id="rcDesc" value="${esc(r.descricao)}" placeholder="Ex.: Aluguel"></label>
+    <label class="field"><span>Fornecedor</span><input type="text" id="rcNome" value="${esc(r.nome)}"></label>
+    <label class="field"><span>Categoria</span><select id="rcCat">${CATEGORIAS.map(x => `<option ${x === r.categoria ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+    <div class="row" style="flex-wrap:nowrap">
+      <label class="field" style="flex:1"><span>Valor (R$)</span><input type="number" id="rcValor" step="0.01" inputmode="decimal" value="${r.valor}"></label>
+      <label class="field" style="flex:1"><span>Dia do vencimento</span><input type="number" id="rcDia" min="1" max="31" value="${r.dia}"></label>
+    </div>
+    <div class="toggle"><span>Valor muda todo mês</span><button class="switch ${r.variavel ? 'on' : ''}" id="rcVar" aria-label="Valor variável"></button></div>
+    <button class="btn primary block" id="rcOk" style="margin-top:14px">Salvar</button>
+    ${r.nova ? '' : '<div style="text-align:center;margin-top:12px"><button class="linkbtn" id="rcDel">Apagar conta fixa</button></div>'}`, el => {
+    const sw = el.querySelector('#rcVar'); sw.addEventListener('click', () => sw.classList.toggle('on'));
+    el.querySelector('#rcOk').addEventListener('click', () => {
+      const v = x => el.querySelector('#' + x).value.trim();
+      if (!v('rcDesc') || !+v('rcValor')) return toast('Preencha descrição e valor');
+      Object.assign(r, { descricao: v('rcDesc'), nome: v('rcNome'), categoria: v('rcCat'), valor: +v('rcValor'), dia: Math.min(31, Math.max(1, +v('rcDia') || 10)), variavel: sw.classList.contains('on') });
+      if (r.nova) { delete r.nova; state.recorrentes.push(r); }
+      // As próximas ainda não pagas acompanham a mudança.
+      state.lancamentos.filter(l => l.recorrenteId === r.id && !l.pagoEm).forEach(l => { Object.assign(l, { descricao: r.descricao, nome: r.nome || r.descricao, categoria: r.categoria, valor: r.valor, vencimento: l.vencimento.slice(0, 8) + String(r.dia).padStart(2, '0') }); });
+      save(); render(); sheetRecorrentes();
+    });
+    el.querySelector('#rcDel')?.addEventListener('click', () => confirmar('Apagar esta conta fixa?', 'As contas já lançadas continuam; só deixa de lançar nos próximos meses.', 'Apagar', () => {
+      state.recorrentes = state.recorrentes.filter(x => x.id !== r.id);
+      state.lancamentos = state.lancamentos.filter(l => !(l.recorrenteId === r.id && !l.pagoEm));
+      save(); render();
+    }));
+  });
 }
 
 const FORMAS = ['PIX', 'Dinheiro', 'Cartão de crédito', 'Cartão de débito', 'Transferência bancária', 'Boleto'];
@@ -553,6 +752,7 @@ function sheetLanc(id) {
     el.querySelector('#lcDesfaz')?.addEventListener('click', () => { l.pagoEm = ''; l.editado = true; save(); closeSheet(); render(); toast('Pagamento desfeito'); });
     el.querySelector('#lcExclui').addEventListener('click', () => confirmar('Excluir esta conta?', esc(`${l.nome} · ${brl(l.valor)}`), 'Excluir', () => {
       if (l.origem === 'mensalidade' && l.clienteId) state.excecoesFin.push({ c: l.clienteId, m: l.vencimento.slice(0, 7) });
+      if (l.origem === 'recorrente' && l.recorrenteId) state.excecoesFin.push({ r: l.recorrenteId, m: l.vencimento.slice(0, 7) });
       state.lancamentos = state.lancamentos.filter(x => x.id !== l.id);
       save(); render(); toast('Conta excluída');
     }));
@@ -1106,6 +1306,7 @@ const tipoArquivo = t => {
   if (t.startsWith('{') || t.startsWith('[')) return 'agenda';
   const cab = t.split('\n')[0].toLowerCase();
   if (/fornecedor/.test(cab) || (/servi[çc]o\/produto/.test(cab) && /data venc/.test(cab))) return 'financeiro';
+  if (/atendimentos gerais/.test(cab) || (/data\/hora/.test(cab) && /tipo atendimento/.test(cab))) return 'atendimentos';
   return /hor[áa]rio/.test(cab) ? 'planos' : 'clientes';
 };
 
@@ -1145,12 +1346,60 @@ function importarFinanceiro(txt) {
     if (!dados.vencimento) continue;
     if (atual) Object.assign(atual, dados); else state.lancamentos.push({ id: uid('f'), ...dados });
     if (c && ehMensalidade(dados.descricao)) meses.add(c.id + ' ' + dados.vencimento.slice(0, 7));
+    if (pagar) meses.add('p ' + chaveNome(dados.descricao) + ' ' + dados.vencimento.slice(0, 7));
     n++;
   }
   // A mensalidade que o Seu Fisio já lançou substitui a gerada pelo app no mesmo mês (se ainda não foi paga).
-  state.lancamentos = state.lancamentos.filter(l => !(l.origem === 'mensalidade' && !l.pagoEm && meses.has(l.clienteId + ' ' + l.vencimento.slice(0, 7))));
+  state.lancamentos = state.lancamentos.filter(l => !(!l.pagoEm && ((l.origem === 'mensalidade' && meses.has(l.clienteId + ' ' + l.vencimento.slice(0, 7)))
+    || (l.origem === 'recorrente' && meses.has('p ' + chaveNome(l.descricao) + ' ' + l.vencimento.slice(0, 7))))));
   save();
   return { n, tipo };
+}
+
+// Histórico do Seu Fisio (Relatórios → Atendimentos gerais): cada horário vira uma aula, juntando quem estava junto.
+// Só entra o que já passou; daqui para a frente a agenda vem dos horários fixos e do que for marcado no app.
+function importarAtendimentos(txt) {
+  const linhas = txt.split('\n').map(l => l.replace(/\r$/, '').split('\t').map(x => x.trim()));
+  const hi = linhas.findIndex(l => /^cliente$/i.test(l[0] || ''));
+  if (hi < 0) return 0;
+  const cab = linhas[hi].map(h => h.toLowerCase());
+  const col = re => cab.findIndex(h => re.test(h));
+  const ix = { nome: col(/^cliente/), dh: col(/data/), sala: col(/^sala/), tipo: col(/tipo/), st: col(/status/) };
+  const grupos = new Map();
+  for (const b of linhas.slice(hi + 1)) {
+    const m = (b[ix.dh] || '').match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+    if (!m || !b[ix.nome]) continue;
+    const data = `${m[3]}-${m[2]}-${m[1]}`, hora = `${m[4]}:${m[5]}`;
+    if (data >= hoje()) continue;
+    const sala = b[ix.sala] || '', tipo = b[ix.tipo] || '', st = b[ix.st] || '';
+    const zen = /zen/i.test(sala) || /massagem|drenagem|reiki/i.test(tipo);
+    const chave = `${data} ${hora} ${zen ? 'zen' : 'pilates'}`;
+    if (!grupos.has(chave)) grupos.set(chave, { data, hora, sala, tipo, zen, gente: [] });
+    grupos.get(chave).gente.push({ nome: b[ix.nome], st });
+  }
+  let n = 0;
+  for (const [chave, g] of grupos) {
+    const ref = 'h-' + chave.replace(/\s/g, '-');
+    let a = state.aulas.find(x => x.ref === ref) || state.aulas.find(x => x.data === g.data && x.hora === g.hora && !!ehMassagem(x) === g.zen);
+    if (!a) { a = { id: uid('a'), data: g.data, hora: g.hora, clientes: [], status: 'agendada', planos: {}, notas: {}, origem: 'historico' }; state.aulas.push(a); }
+    Object.assign(a, { ref, sala: g.sala, servico: g.tipo });
+    a.presenca = a.presenca || {};
+    let feita = false;
+    for (const p of g.gente) {
+      let c = clientePorNome(p.nome);
+      if (!c) { c = acharOuCriarCliente(p.nome); c.inativo = true; }
+      if (!a.clientes.includes(c.id)) a.clientes.push(c.id);
+      if (/aus[êe]ncia|falta/i.test(p.st)) {
+        a.presenca[c.id] = /justificad/i.test(p.st) ? 'justificada' : 'falta';
+        const rem = p.st.match(/rem\.\s*([\d/]+\s*[\d:]*)/i);
+        if (rem) { a.remarcacao = a.remarcacao || {}; a.remarcacao[c.id] = rem[1].trim(); }
+      } else if (/finalizad/i.test(p.st)) feita = true;
+    }
+    if (feita || a.clientes.every(c => a.presenca[c])) a.status = 'realizada';
+    n++;
+  }
+  save();
+  return n;
 }
 
 // Mensalidade do plano: o app lança a do mês atual e a do próximo, no dia do início do plano.
@@ -1184,12 +1433,13 @@ async function importarArquivos(files) {
 function importarLidos(lidos) {
   if (state.exemplo) limparExemplo();
   // Clientes primeiro, depois os planos (horários fixos) e por fim a agenda, que acha os nomes já cadastrados.
-  const ordem = { clientes: 0, planos: 1, financeiro: 2, agenda: 3 };
+  const ordem = { clientes: 0, planos: 1, financeiro: 2, atendimentos: 3, agenda: 4 };
   lidos.sort((a, b) => ordem[tipoArquivo(a.txt.trim())] - ordem[tipoArquivo(b.txt.trim())]);
   const msgs = [];
   for (const { txt } of lidos) {
     const t = txt.trim();
     if (tipoArquivo(t) === 'planos') { msgs.push(`${importarPlanos(t)} planos com horário`); continue; }
+    if (tipoArquivo(t) === 'atendimentos') { msgs.push(`${importarAtendimentos(t)} aulas do histórico`); continue; }
     if (tipoArquivo(t) === 'financeiro') { const r = importarFinanceiro(t); msgs.push(`${r.n} contas a ${r.tipo}`); continue; }
     if (t.startsWith('{') || t.startsWith('[')) {
       const r = importarAgenda(t); msgs.push(`${r.novas} aulas`);
@@ -1203,7 +1453,7 @@ function importarLidos(lidos) {
 // No computador, o app lê sozinho a pasta "Importacao App Aulas" (ligada como .dados).
 // Ela fica fora do GitHub e do link publicado; só existe neste PC. Reimporta quando os arquivos mudam.
 const ARQ_LOCAIS = ['clientes-erapilates.tsv', 'clientes-seufisio-completo.xlsx', 'planos-fixos-erapilates.tsv',
-  'contas-receber-seufisio.xlsx', 'contas-pagar-seufisio.xlsx', 'agenda-erapilates.json'];
+  'contas-receber-seufisio.xlsx', 'contas-pagar-seufisio.xlsx', 'atendimentos-seufisio.xlsx', 'agenda-erapilates.json'];
 async function sincronizarPastaLocal() {
   if (!['localhost', '127.0.0.1'].includes(location.hostname)) return;
   const lidos = [];
@@ -1250,6 +1500,7 @@ function importarAgenda(txt) {
 // ——— Ações ———
 function planejar(a, forcar = false) {
   const exs = exercicios();
+  if (ehMassagem(a)) return;
   a.clientes.forEach(cId => {
     if (a.presenca?.[cId] || (!forcar && a.planos[cId]?.itens?.length)) return;
     a.planos[cId] = { itens: sugerirPlano(state, exs, cId, a.data), aprovado: false };
@@ -1270,6 +1521,8 @@ const acoes = {
     save(); render(); toast(`${n} aula${n > 1 ? 's' : ''} com sugestão pronta`);
   },
   aluno: el => { ui.aluno[el.dataset.a] = el.dataset.c; render(); },
+  vista: el => { ui.vista = el.dataset.v; render(); },
+  'dia-lista': el => { ui.dia = el.dataset.d; ui.vista = 'dia'; render(); },
   presenca: el => {
     const a = state.aulas.find(x => x.id === el.dataset.a), c = el.dataset.c, v = el.dataset.v;
     a.presenca = a.presenca || {};
@@ -1282,6 +1535,10 @@ const acoes = {
   'nova-conta': el => sheetNovaConta(el.dataset.c || null),
   'fin-mes': el => { ui.finMes = el.dataset.m; render(); },
   'fin-tipo': el => { ui.finTipo = el.dataset.v; render(); },
+  'fin-vista': el => { ui.finVista = el.dataset.v; render(); },
+  'fin-ano': el => { ui.finAno = String(el.dataset.a); render(); },
+  'fin-ir-mes': el => { ui.finMes = el.dataset.m; ui.finVista = 'mes'; render(); window.scrollTo(0, 0); },
+  recorrentes: () => sheetRecorrentes(),
   'tira-hr': el => {
     const c = cliente(el.dataset.c), [h] = c.horarios.splice(+el.dataset.i, 1), t = hoje();
     // Sai das próximas aulas criadas por esse horário (as já realizadas ficam no histórico).
@@ -1442,6 +1699,8 @@ function reduzirFoto(file) {
 state.excecoes = state.excecoes || [];
 state.lancamentos = state.lancamentos || [];
 state.excecoesFin = state.excecoesFin || [];
+state.recorrentes = state.recorrentes || [];
+if (!state.settings.recorrentesDetectados && state.lancamentos.some(l => l.tipo === 'pagar')) detectarRecorrentes();
 if (!state.settings.fixosDetectados) detectarFixos();
 render();
 sincronizarPastaLocal();

@@ -269,6 +269,28 @@ textarea:focus, input:focus, select:focus { border-color: var(--accent); }
 label.field { display: block; margin-top: 12px; }
 label.field > span { display: block; font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
 
+/* Agenda: visão da semana em grade */
+.vista { margin: 6px 0 12px; }
+.grade { display: grid; gap: 3px; margin: 4px -6px 0; }
+.g-hora { color: var(--ink-2); font-size: 11px; padding: 5px 2px 0 0; text-align: right; }
+.g-dia { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); padding: 6px 0; text-align: center; border-radius: 8px; line-height: 1.3; }
+.g-dia b { display: block; font-family: var(--font-display); font-size: 17px; font-weight: 400; letter-spacing: 0; color: var(--ink); text-transform: none; }
+.g-dia.today { background: var(--primary); color: var(--primary-ink); }
+.g-dia.today b { color: var(--primary-ink); }
+.g-cel { min-height: 36px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
+.g-aula { display: block; border-radius: 6px; padding: 4px 4px 4px 5px; line-height: 1.25; text-decoration: none; color: var(--ink); background: var(--surface-2); font-size: 11px; min-width: 0; border-left: 3px solid var(--ink-3); }
+.g-aula span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-aula small { display: block; font-family: var(--font-mono); font-size: 9px; color: var(--ink-2); }
+.g-aula.marcada { background: var(--accent-soft); border-left-color: var(--accent); }
+.g-aula.planejada { background: color-mix(in srgb, var(--gold) 22%, var(--bg)); border-left-color: var(--gold); }
+.g-aula.feita { background: var(--sage-soft); border-left-color: var(--sage); }
+.g-aula.falta { background: var(--warn-soft); border-left-color: var(--warn); color: var(--warn); }
+.g-aula.pendente { background: var(--bg); border: 1px dashed var(--ink-3); border-left-width: 3px; }
+.g-aula.zen { background: var(--surface); border-left-color: var(--ink-2); font-style: italic; }
+.g-legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 14px; font-size: 12px; color: var(--ink-2); }
+.g-legenda span { white-space: nowrap; }
+.g-legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
 /* Financeiro */
 .lanc { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; width: 100%; text-align: left; padding: 12px 4px; border-bottom: 1px solid var(--line); }
 .lanc .nome { font-weight: 500; }
@@ -283,9 +305,17 @@ label.field > span { display: block; font-size: 13px; color: var(--ink-2); margi
 .lanc.pago .valor > span:first-child { color: var(--ink-2); }
 .fin-mes { display: flex; align-items: center; gap: 8px; }
 .fin-mes h1 { flex: 1; }
-.stats.fin { grid-template-columns: repeat(2, 1fr); }
+.stats.fin { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stats.fin .stat b { font-size: clamp(19px, 5.6vw, 28px); white-space: nowrap; }
 .stat.atraso b { color: var(--warn); }
 .fin-centros { margin-top: 8px; }
+.tabela { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.tabela th { font-family: var(--font-mono); font-weight: 400; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); text-align: right; padding: 6px 4px; }
+.tabela td { text-align: right; padding: 9px 4px; border-top: 1px solid var(--line); white-space: nowrap; }
+.tabela th:first-child, .tabela td:first-child { text-align: left; }
+.tabela tbody tr { cursor: pointer; }
+.tabela td.neg { color: var(--warn); }
+@media (max-width: 420px) { .tabela { font-size: 11.5px; } .tabela td, .tabela th { padding-left: 2px; padding-right: 2px; } }
 .toast { position: fixed; left: 50%; bottom: calc(var(--nav-h) + 20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 999px; font-size: 14px; z-index: 60; max-width: calc(100% - 32px); animation: up .2s ease; }
 
 @keyframes fade { from { opacity: 0; } }
