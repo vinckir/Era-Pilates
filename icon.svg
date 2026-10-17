@@ -1,5 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#F5F0E8"/>
-  <circle cx="256" cy="256" r="168" fill="none" stroke="#A8705A" stroke-width="10"/>
-  <text x="256" y="292" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="118" letter-spacing="22" fill="#2E2925">ERA</text>
+  <!-- Ícone oficial: símbolo creme sobre cacau (versão reduzida, traço grosso, para tamanhos pequenos). -->
+  <rect width="512" height="512" fill="#6B3F2D"/>
+  <g transform="translate(106 119) scale(.655)" fill="none" stroke="#F5EFE7" stroke-linecap="round">
+    <path stroke-width="18.2" d="M153.9,299.9 A111.5,111.5 0 1 1 303.4,299.9"/>
+    <path stroke-width="18.2" d="M11.8,260.8 A291.3,291.3 0 0 0 445.5,260.8"/>
+    <path stroke-width="17.9" d="M64.4,386.5 C91.9,381.6 120.1,374.1 162.8,381.4 S313.8,417.9 386.1,397.7"/>
+    <g fill="#F5EFE7" stroke="none">
+      <circle cx="228.7" cy="15.3" r="10.6"/>
+      <circle cx="228.7" cy="63.5" r="17.5"/>
+      <circle cx="228.7" cy="167.5" r="26.8"/>
+    </g>
+  </g>
 </svg>

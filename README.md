@@ -51,11 +51,10 @@ Também aceita uma aula por linha: `2026-10-20 08:00 Ana Souza, Bruno Lima`. Cli
 
 ## Identidade visual
 
-As cores e fontes atuais são **provisórias**. Todas ficam nos tokens no topo de `styles.css` (`--accent`, `--bg`, `--font-display`…). Para trocar pela identidade oficial do site ou do Claude Design, basta mudar ali.
+Aplicada a partir do Brand Book v1 do ERA Pilates (outubro/2026): paleta creme, terracota e cacau, fontes Fraunces, Manrope e JetBrains Mono, logo e ícone oficiais. Os valores ficam nos tokens no topo de `styles.css`.
 
 ## Roadmap
 
-1. Aplicar a identidade oficial (cores, fontes, logo).
 2. Importar os clientes ativos do sistema de agendamento.
 3. Backend leve (ex.: Supabase) para sincronizar os aparelhos e deixar uma rotina semanal ler a agenda e gravar as aulas.
 4. Rotina com IA que lê as anotações e o histórico e reescreve as sugestões da semana.

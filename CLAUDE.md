@@ -5,7 +5,7 @@ O objetivo é tirar da Jessica o peso de improvisar as aulas. O app sugere a aul
 
 Fale em **português (BR)**, de forma direta. O Vinícius não é programador: explique as decisões em linguagem simples.
 
-## Estado atual (v0.2)
+## Estado atual (v0.3)
 - HTML/CSS/JS puro com ES modules, **sem build** e sem dependências. Os arquivos estáticos já estão prontos para o Netlify (`netlify.toml`).
 - Também está publicado como Artifact privado no claude.ai: https://claude.ai/artifact/9NGMuE1EdeUdtVGvHo5GNh (atualizar republicando `index.html` com os arquivos de `js/` e `styles.css`).
 - Os dados ficam no **localStorage** do aparelho (`era-pilates.v1`), com backup e restauração em JSON na tela *Mais*. **Ainda não há backend.**
@@ -13,8 +13,9 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
   **Nunca commitar dados de clientes** (nomes, telefones, agenda) no repositório.
 
 ## Arquivos
-- `index.html`: casca, barra de abas e fontes (Cormorant Garamond + Jost).
-- `styles.css`: tokens de marca no topo (**provisórios**: a identidade oficial do erapilates.com.br ainda não foi aplicada) e modo escuro.
+- `index.html`: casca, barra de abas e fontes da marca (Fraunces, Manrope e JetBrains Mono, do Google Fonts).
+- `styles.css`: tokens de marca no topo, tirados do **Brand Book v1** (`../Era Pilates BrandBook/brand/`), e modo escuro (fundo café, texto creme, rosé como acento).
+- `brand/`: logo horizontal (usado como máscara CSS, então a cor segue o tema) e favicon. Ícones do app (`icon-*.png`, `icon.svg`): símbolo creme sobre cacau.
 - `js/exercicios.js`: base de 140 exercícios (`[id, nome, aparelho, nível, bloco, posição, foco, evitar, ajuda, origem, progressão, dica]`), mais BLOCOS, APARELHOS, RESTRICOES e OBJETIVOS.
 - `js/sugestao.js`: motor de sugestão local.
   - Segue a ordem clássica dos blocos.
@@ -32,6 +33,13 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 ## Modelo de dados (localStorage)
 `{ version:1, settings:{aparelhos, soBase}, exOverrides:{[exId]:{status,nota,video,foto,adiado}}, exCustom:[], clientes:[{id,nome,nivel,objetivos[],restricoes[{tag,desde,temporaria}],obs,favoritos[],inativo,soMassagem,telefone,plano,ultimoAtendimento}], aulas:[{id,data,hora,clientes[≤2],status:'agendada'|'planejada'|'realizada',planos:{[clienteId]:{itens:[{exId,motivo,feito,fb}],aprovado}},notas:{[clienteId]:texto},origem}] }`
 
+## Regras da marca no app (Brand Book)
+- Usar só as cores dos tokens. Texto principal café, nunca preto. Botão principal cacau com texto creme (`--primary`).
+- Títulos em Fraunces (300/400, uma palavra em itálico quando fizer sentido). Texto em Manrope. Rótulos (`.eyebrow`) em JetBrains Mono, caixa alta, terracota.
+- Peso máximo de fonte 500. Pedra (`--ink-3`) só para legendas de 14px ou mais. Cards 14px de raio, botões em pílula, sem sombras fortes nem gradientes.
+- Ícones de traço fino (1,5px), sem preenchimento. Área de toque mínima de 44px.
+- Tom de voz: frases curtas e serenas, falando com "você".
+
 ## Regras de negócio já decididas
 - Cada aula tem **1 ou 2 alunos** (dupla). No Seu Fisio, a dupla é feita de dois atendimentos separados no mesmo horário. Na importação, o app junta quem tem o mesmo data+hora.
 - Cliente ativo ou inativo vem da *Situação* do Seu Fisio. Quem é **só massagem/drenagem** entra como inativo no app (`soMassagem: true`).
@@ -42,7 +50,7 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 `python3 -m http.server 8000` e abrir `http://localhost:8000`. Para testes automatizados, usar o Playwright: abrir as telas, rodar o fluxo agenda → planejar semana → aula → marcar feito → finalizar e conferir que não há `pageerror`.
 
 ## Próximos passos (roadmap)
-1. Identidade visual oficial: cores, fontes e logo do site e do projeto no Claude Design.
+1. ~~Identidade visual oficial~~ (aplicada em 17/10/2026, a partir do Brand Book).
 2. Backend gratuito (sugestão: **Supabase**, plano free) para sincronizar celular e computador e não depender do localStorage.
 3. Rotina semanal (domingo) que lê o Seu Fisio (veja `docs/seufisio-importacao.md`) e atualiza a agenda no app.
 4. Rotina com IA que lê as anotações e o histórico e prepara as sugestões da semana.
