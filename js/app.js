@@ -286,7 +286,11 @@ function vCliente(id) {
 
   <div class="toggle"><span>Cliente ativo<br><span class="tiny">${c.inativo ? 'Inativo — não aparece ao marcar aulas; o histórico fica guardado' : 'Aparece na lista e ao marcar aulas'}</span></span>
     <button class="switch ${c.inativo ? '' : 'on'}" data-act="ativo" data-c="${c.id}" aria-label="Cliente ativo"></button></div>
-  ${c.telefone ? `<p class="tiny" style="margin-top:8px">Telefone: <a href="tel:${esc(c.telefone)}">${esc(c.telefone)}</a></p>` : ''}
+  <div class="row" style="margin-top:10px">
+    ${c.plano ? `<span class="chip accent">${esc(c.plano)}</span>` : ''}
+    ${c.ultimoAtendimento ? `<span class="chip">Último atendimento ${dataCurta(c.ultimoAtendimento)}</span>` : ''}
+    ${c.telefone ? `<a class="chip" href="tel:${esc(c.telefone)}">${esc(c.telefone)}</a>` : ''}
+  </div>
 
   <div class="section"><span class="eyebrow">Nível</span>
     <div class="seg">${[[1, 'Básico'], [2, 'Intermediário'], [3, 'Avançado']].map(([n, t]) => `<button class="${c.nivel === n ? 'on' : ''}" data-act="nivel" data-c="${c.id}" data-n="${n}">${t}</button>`).join('')}</div>
@@ -446,6 +450,12 @@ function vMais() {
     ${Object.entries(APARELHOS).map(([k, t]) => `<div class="toggle"><span>${t}</span><button class="switch ${ap[k] !== false ? 'on' : ''}" data-act="ap" data-k="${k}" aria-label="${t}"></button></div>`).join('')}
     <div class="toggle"><span>Sugerir só exercícios aprovados<br><span class="tiny">Desligado: usa também os que ainda estão “a revisar”</span></span>
       <button class="switch ${state.settings.soBase ? 'on' : ''}" data-act="soBase" aria-label="Só aprovados"></button></div>
+  </div>
+
+  <div class="section"><span class="eyebrow">Importar do Seu Fisio</span>
+    <p class="muted">Escolha os arquivos exportados (<code>clientes-….tsv</code> e/ou <code>agenda-….json</code>). Pode selecionar os dois juntos.
+    Clientes que já existem são atualizados; os dados de exemplo saem na primeira importação.</p>
+    <label class="btn accent block" style="justify-content:center">Escolher arquivos<input type="file" id="importArq" accept=".tsv,.csv,.txt,.json,text/plain,application/json,text/tab-separated-values" multiple hidden></label>
   </div>
 
   <div class="section"><span class="eyebrow">Agenda</span>
@@ -655,21 +665,53 @@ const CABECALHO = /^(nome|paciente|cliente|aluno)s?$/i;
 const FONE = /^\+?[\d\s().-]{8,}$/;
 function importarClientes(txt) {
   let novos = 0, atualizados = 0, inativos = 0;
-  for (const linha of txt.split('\n')) {
-    const cols = linha.split(/\t|;|\|/).map(x => x.trim()).filter(Boolean);
-    if (!cols.length || CABECALHO.test(cols[0])) continue;
-    const nome = cols[0].replace(/\s+/g, ' ');
+  const linhas = txt.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim());
+  // Com cabeçalho (ex.: exportação do Seu Fisio), as colunas são lidas pelo nome.
+  const sep = /\t|;|\|/;
+  const cab = linhas[0]?.split(sep).map(x => x.trim().toLowerCase()) || [];
+  const col = re => cab.findIndex(h => re.test(h));
+  const temCab = CABECALHO.test(cab[0] || '');
+  const ix = temCab ? { nome: col(/^nome|paciente|cliente/), fone: col(/telefone|celular|fone/), sit: col(/situa|status/), ult: col(/[úu]ltimo/), obs: col(/observa|plano/) } : null;
+  for (const linha of temCab ? linhas.slice(1) : linhas) {
+    const bruto = linha.split(sep).map(x => x.trim());
+    const cols = bruto.filter(Boolean);
+    if (!cols.length) continue;
+    const pega = k => (ix && ix[k] >= 0 ? bruto[ix[k]] || '' : '');
+    const obs = pega('obs');
+    if (/duplicad/i.test(obs)) continue;
+    const nome = (ix ? pega('nome') : cols[0]).replace(/\s+/g, ' ');
+    if (!nome || CABECALHO.test(nome)) continue;
     const existia = state.clientes.some(x => x.nome.toLowerCase() === nome.toLowerCase());
     const c = acharOuCriarCliente(nome);
     existia ? atualizados++ : novos++;
-    const resto = cols.slice(1);
-    if (resto.some(x => /^inativ/i.test(x))) { c.inativo = true; inativos++; }
+    const resto = ix ? [pega('sit'), pega('fone')] : cols.slice(1);
+    if (resto.some(x => /^inativ/i.test(x))) c.inativo = true;
     else if (resto.some(x => /^ativ/i.test(x))) c.inativo = false;
-    const fone = resto.find(x => FONE.test(x) && x.replace(/\D/g, '').length >= 8);
+    // Quem só faz massagem/drenagem não entra na lista de Pilates (dá para reativar na ficha).
+    if (/^s[óo] massagem/i.test(obs)) { c.inativo = true; c.soMassagem = true; }
+    if (c.inativo) inativos++;
+    const fone = resto.find(x => FONE.test(x) && x.replace(/\D/g, '').length >= 10);
     if (fone) c.telefone = fone;
+    if (obs) c.plano = obs.replace(/^(último )?plano:\s*/i, '');
+    const ult = pega('ult');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(ult)) c.ultimoAtendimento = ult;
   }
   save();
   return { novos, atualizados, inativos };
+}
+
+async function importarArquivos(files) {
+  if (state.exemplo) limparExemplo();
+  // Clientes primeiro, para a agenda achar os nomes já cadastrados.
+  const lidos = await Promise.all([...files].map(async f => ({ nome: f.name, txt: await f.text() })));
+  lidos.sort((a, b) => (a.txt.trim().startsWith('{') ? 1 : 0) - (b.txt.trim().startsWith('{') ? 1 : 0));
+  const msgs = [];
+  for (const { txt } of lidos) {
+    const t = txt.trim();
+    if (t.startsWith('{') || t.startsWith('[')) { const r = importarAgenda(t); msgs.push(`${r.novas} aulas`); }
+    else { const r = importarClientes(t); msgs.push(`${r.novos + r.atualizados} clientes (${r.novos + r.atualizados - r.inativos} ativos)`); }
+  }
+  render(); toast('Importado: ' + msgs.join(' · '));
 }
 
 function importarAgenda(txt) {
@@ -856,6 +898,7 @@ document.addEventListener('change', ev => {
   const t = ev.target;
   if (t.id === 'exVideo') { setExercicio(t.dataset.id, { video: t.value.trim() }); render(); }
   if (t.id === 'exFoto' && t.files[0]) reduzirFoto(t.files[0]).then(url => { setExercicio(t.dataset.id, { foto: url }); render(); toast('Foto salva'); });
+  if (t.id === 'importArq' && t.files.length) importarArquivos(t.files).catch(() => toast('Não consegui ler o arquivo'));
   if (t.id === 'restaurar' && t.files[0]) t.files[0].text().then(txt => {
     try { const s = JSON.parse(txt); if (s.version !== 1) throw 0; if (!confirm('Substituir os dados deste aparelho pelo backup?')) return; replaceState(s); render(); toast('Backup restaurado'); }
     catch { toast('Arquivo de backup inválido'); }
