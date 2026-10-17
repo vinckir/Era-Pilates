@@ -84,7 +84,7 @@ function vAgenda() {
   return `
   <header class="top">
     <div class="grow">
-      <div class="brand" role="img" aria-label="ERA Pilates"></div>
+      <div class="brand" role="img" aria-label="ERA Pilates"><i class="sym"></i><i class="word"></i></div>
     </div>
     ${d !== t ? `<button class="btn small ghost" data-act="dia" data-d="${t}">Hoje</button>` : ''}
   </header>

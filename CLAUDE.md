@@ -15,7 +15,8 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 ## Arquivos
 - `index.html`: casca, barra de abas e fontes da marca (Fraunces, Manrope e JetBrains Mono, do Google Fonts).
 - `styles.css`: tokens de marca no topo, tirados do **Brand Book v1** (`../Era Pilates BrandBook/brand/`), e modo escuro (fundo café, texto creme, rosé como acento).
-- `brand/`: logo horizontal (usado como máscara CSS, então a cor segue o tema) e favicon. Ícones do app (`icon-*.png`, `icon.svg`): símbolo creme sobre cacau.
+- `brand/`: logo **original** (símbolo e palavra, os mesmos recortes do site `Documentos/Era Pilates/Era Pilates Website/deploy/assets/`), usado como máscara CSS para a cor seguir o tema, e favicon do site. Ícones do app (`icon-*.png`): símbolo original creme sobre cacau.
+  **Não usar os logos redesenhados do Brand Book** (pontas arredondadas, traço mais grosso): o Vinícius rejeitou. Do Brand Book vêm só cores, fontes e regras.
 - `js/exercicios.js`: base de 140 exercícios (`[id, nome, aparelho, nível, bloco, posição, foco, evitar, ajuda, origem, progressão, dica]`), mais BLOCOS, APARELHOS, RESTRICOES e OBJETIVOS.
 - `js/sugestao.js`: motor de sugestão local.
   - Segue a ordem clássica dos blocos.

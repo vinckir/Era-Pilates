@@ -74,8 +74,12 @@ h1 em, h2 em, h3 em { font-style: italic; font-weight: 300; }
 #app { max-width: 620px; margin: 0 auto; padding: 0 16px 24px; }
 .top { padding: calc(14px + env(safe-area-inset-top)) 0 10px; display: flex; align-items: center; gap: 12px; }
 .top .grow { flex: 1; min-width: 0; }
-/* Logo horizontal oficial (mín. 130px de largura). A cor vem da paleta, então troca sozinha no modo escuro. */
-.brand { width: 140px; aspect-ratio: 780 / 324; background: var(--accent); -webkit-mask: url(brand/logo-horizontal.png) no-repeat left center / contain; mask: url(brand/logo-horizontal.png) no-repeat left center / contain; }
+/* Logo original (os mesmos recortes do site): símbolo + palavra lado a lado, como no menu do erapilates.com.br.
+   Os PNGs servem de máscara e a cor vem da paleta, então o logo troca sozinho no modo escuro. */
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand i { display: block; background: var(--accent); -webkit-mask: no-repeat center / contain; mask: no-repeat center / contain; }
+.brand .sym { height: 52px; aspect-ratio: 456 / 417; -webkit-mask-image: url(brand/logo-simbolo.png); mask-image: url(brand/logo-simbolo.png); }
+.brand .word { height: 40px; aspect-ratio: 556 / 371; -webkit-mask-image: url(brand/logo-palavra.png); mask-image: url(brand/logo-palavra.png); }
 .iconbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); box-shadow: var(--shadow); flex: none; }
 .iconbtn svg { width: 20px; height: 20px; }
 
