@@ -7,7 +7,7 @@ import {
 } from './store.js';
 
 const $app = document.getElementById('app');
-const ui = { dia: hoje(), aluno: {}, exFiltro: { q: '', ap: '', st: '' }, cliQ: '', curaIdx: 0 };
+const ui = { dia: hoje(), aluno: {}, exFiltro: { q: '', ap: '', st: '' }, cliQ: '', cliInativos: false };
 
 // ——— Ícones ———
 const I = {
@@ -153,6 +153,7 @@ function vAula(id) {
       <p class="eyebrow">${dataLonga(a.data)}</p>
       <h2>${a.hora} · ${esc(a.clientes.map(x => primeiro(cliente(x)?.nome)).join(' & '))}</h2>
     </div>
+    <button class="btn small ghost" data-act="editar-aula" data-a="${a.id}">Editar</button>
   </header>
 
   ${a.clientes.length > 1 ? `<div class="seg">${a.clientes.map(x => `<button class="${x === alunoId ? 'on' : ''}" data-act="aluno" data-a="${a.id}" data-c="${x}">${esc(cliente(x)?.nome)}</button>`).join('')}</div>` : ''}
@@ -238,12 +239,17 @@ function aulaAtual(el) {
 // ——— CLIENTES ———
 function vClientes() {
   const q = ui.cliQ.toLowerCase();
-  const lista = state.clientes.filter(c => !c.inativo && c.nome.toLowerCase().includes(q)).sort((a, b) => a.nome.localeCompare(b.nome));
+  const lista = state.clientes.filter(c => !!c.inativo === ui.cliInativos && c.nome.toLowerCase().includes(q)).sort((a, b) => a.nome.localeCompare(b.nome));
+  const nInativos = state.clientes.filter(c => c.inativo).length;
   const t = hoje();
   return `
   <header class="top"><div class="grow"><p class="eyebrow">Carteira</p><h1>Clientes</h1></div>
     <button class="btn small" data-act="novo-cliente">${I.plus} Cliente</button></header>
   <div class="search">${I.search}<input type="search" id="cliQ" placeholder="Buscar cliente" value="${esc(ui.cliQ)}"></div>
+  <div class="seg" style="margin-top:10px">
+    <button class="${ui.cliInativos ? '' : 'on'}" data-act="cli-inativos" data-v="">Ativos · ${state.clientes.length - nInativos}</button>
+    <button class="${ui.cliInativos ? 'on' : ''}" data-act="cli-inativos" data-v="1">Inativos · ${nInativos}</button>
+  </div>
   <div class="section">
     ${lista.map(c => {
       const prox = state.aulas.filter(a => a.clientes.includes(c.id) && a.data >= t && a.status !== 'realizada').sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora))[0];
@@ -253,7 +259,7 @@ function vClientes() {
           <div class="tiny">${prox ? `Próxima: ${DIAS[parseIso(prox.data).getDay()].slice(0, 3)} ${dataCurta(prox.data)} · ${prox.hora}` : 'Sem aula marcada'}</div></div>
         <span>${(c.restricoes || []).length ? `<span class="chip warn">${c.restricoes.length}</span>` : ''} ${nivelDots(c.nivel)}</span>
       </a>`;
-    }).join('') || '<div class="empty">Nenhum cliente encontrado.</div>'}
+    }).join('') || `<div class="empty">${state.clientes.length ? 'Nenhum cliente encontrado.' : 'Nenhum cliente ainda. Toque em “+ Cliente” ou importe a lista em Mais.'}</div>`}
   </div>`;
 }
 
@@ -277,6 +283,10 @@ function vCliente(id) {
     <div class="grow"><p class="eyebrow">Ficha</p><h2>${esc(c.nome)}</h2></div>
     <button class="btn small ghost" data-act="renomear" data-c="${c.id}">Editar</button>
   </header>
+
+  <div class="toggle"><span>Cliente ativo<br><span class="tiny">${c.inativo ? 'Inativo — não aparece ao marcar aulas; o histórico fica guardado' : 'Aparece na lista e ao marcar aulas'}</span></span>
+    <button class="switch ${c.inativo ? '' : 'on'}" data-act="ativo" data-c="${c.id}" aria-label="Cliente ativo"></button></div>
+  ${c.telefone ? `<p class="tiny" style="margin-top:8px">Telefone: <a href="tel:${esc(c.telefone)}">${esc(c.telefone)}</a></p>` : ''}
 
   <div class="section"><span class="eyebrow">Nível</span>
     <div class="seg">${[[1, 'Básico'], [2, 'Intermediário'], [3, 'Avançado']].map(([n, t]) => `<button class="${c.nivel === n ? 'on' : ''}" data-act="nivel" data-c="${c.id}" data-n="${n}">${t}</button>`).join('')}</div>
@@ -320,9 +330,7 @@ function vCliente(id) {
         ${itens.map(i => `<div class="row between" style="padding:3px 0"><span class="${i.feito ? '' : 'muted'}">${esc(exs[i.exId]?.nome || i.exId)}</span>${i.fb ? `<span class="chip ${i.fb === 'dor' ? 'warn' : ''}">${{ facil: 'fácil', ok: 'ok', dificil: 'difícil', dor: 'dor' }[i.fb]}</span>` : ''}</div>`).join('')}</div>
       </details>`;
     }).join('') || '<p class="muted">Ainda sem aulas registradas.</p>'}
-  </div>
-
-  <div class="section" style="text-align:center"><button class="linkbtn" data-act="inativar" data-c="${c.id}">Marcar como inativo</button></div>`;
+  </div>`;
 }
 
 // ——— EXERCÍCIOS ———
@@ -448,8 +456,10 @@ function vMais() {
   </div>
 
   <div class="section"><span class="eyebrow">Clientes em lote</span>
-    <p class="muted">Um nome por linha. Quem já existe é ignorado.</p>
-    <textarea id="clientesTxt" placeholder="Ana Souza&#10;Bruno Lima" style="padding-right:14px"></textarea>
+    <p class="muted">Um cliente por linha — pode colar direto de uma planilha (Excel / Google Sheets / relatório do sistema).
+    A primeira coluna é o nome; se alguma coluna disser “inativo”, ele entra como inativo; telefone é reconhecido sozinho.
+    Quem já existe é atualizado, não duplicado.${state.exemplo ? ' <b>Os dados de exemplo são removidos na primeira importação.</b>' : ''}</p>
+    <textarea id="clientesTxt" placeholder="Ana Souza&#9;(51) 99999-0000&#9;Ativo&#10;Bruno Lima&#9;&#9;Inativo" style="padding-right:14px"></textarea>
     <button class="btn block" style="margin-top:8px" data-act="importar-clientes">Adicionar clientes</button>
   </div>
 
@@ -485,30 +495,51 @@ function sheet(html, onMount) {
 }
 function closeSheet() { document.querySelector('.sheet-bg')?.remove(); }
 
-function sheetNovaAula() {
-  const sel = new Set();
-  const lista = state.clientes.filter(c => !c.inativo).sort((a, b) => a.nome.localeCompare(b.nome));
-  sheet(`<h2>Nova aula</h2>
+function sheetAula(aula = null) {
+  const sel = new Set(aula?.clientes || []);
+  const lista = () => state.clientes.filter(c => !c.inativo || sel.has(c.id)).sort((a, b) => a.nome.localeCompare(b.nome));
+  const linha = c => `<button class="checkrow ${sel.has(c.id) ? 'on' : ''}" data-id="${c.id}"><span class="box">${I.check}</span>${esc(c.nome)}</button>`;
+  sheet(`<h2>${aula ? 'Editar aula' : 'Nova aula'}</h2>
     <div class="row" style="flex-wrap:nowrap">
-      <label class="field" style="flex:1;margin:0"><span>Dia</span><input type="date" id="naData" value="${ui.dia}"></label>
-      <label class="field" style="flex:1;margin:0"><span>Hora</span><input type="time" id="naHora" value="08:00"></label>
+      <label class="field" style="flex:1;margin:0"><span>Dia</span><input type="date" id="naData" value="${aula?.data || ui.dia}"></label>
+      <label class="field" style="flex:1;margin:0"><span>Hora</span><input type="time" id="naHora" value="${aula?.hora || '08:00'}"></label>
     </div>
-    <label class="field"><span>Clientes (até 2)</span><input type="search" id="naQ" placeholder="Buscar"></label>
-    <div id="naLista">${lista.map(c => `<button class="checkrow" data-id="${c.id}"><span class="box">${I.check}</span>${esc(c.nome)}</button>`).join('')}</div>
-    <button class="btn primary block" id="naOk" style="margin-top:14px" disabled>Criar aula</button>`, el => {
-    const ok = el.querySelector('#naOk');
-    el.querySelector('#naQ').addEventListener('input', ev => {
-      const q = ev.target.value.toLowerCase();
-      el.querySelectorAll('.checkrow').forEach(b => { b.style.display = b.textContent.toLowerCase().includes(q) ? '' : 'none'; });
-    });
-    el.querySelectorAll('.checkrow').forEach(b => b.addEventListener('click', () => {
+    <label class="field"><span>Clientes (até 2) — digite para buscar ou cadastrar</span><input type="search" id="naQ" placeholder="Buscar ou nome novo"></label>
+    <button class="checkrow" id="naNovo" hidden><span class="box">${I.plus}</span><span></span></button>
+    <div id="naLista">${lista().map(linha).join('')}</div>
+    <button class="btn primary block" id="naOk" style="margin-top:14px" ${sel.size ? '' : 'disabled'}>${aula ? 'Salvar' : 'Criar aula'}</button>`, el => {
+    const ok = el.querySelector('#naOk'), q = el.querySelector('#naQ'), novo = el.querySelector('#naNovo');
+    const marcar = b => {
       const id = b.dataset.id;
       if (sel.has(id)) sel.delete(id); else if (sel.size < 2) sel.add(id); else return toast('No máximo 2 por aula');
       b.classList.toggle('on', sel.has(id));
       ok.disabled = !sel.size;
-    }));
+    };
+    const ligar = b => b.addEventListener('click', () => marcar(b));
+    el.querySelectorAll('#naLista .checkrow').forEach(ligar);
+    q.addEventListener('input', () => {
+      const t = q.value.trim().toLowerCase();
+      el.querySelectorAll('#naLista .checkrow').forEach(b => { b.style.display = b.textContent.toLowerCase().includes(t) ? '' : 'none'; });
+      const existe = state.clientes.some(c => c.nome.toLowerCase() === t);
+      novo.hidden = !t || existe;
+      novo.lastElementChild.textContent = `Cadastrar “${q.value.trim()}”`;
+    });
+    novo.addEventListener('click', () => {
+      if (sel.size >= 2) return toast('No máximo 2 por aula');
+      const c = acharOuCriarCliente(q.value);
+      el.querySelector('#naLista').insertAdjacentHTML('afterbegin', linha(c));
+      const b = el.querySelector(`#naLista [data-id="${c.id}"]`);
+      ligar(b); marcar(b);
+      q.value = ''; q.dispatchEvent(new Event('input'));
+    });
     ok.addEventListener('click', () => {
-      const a = { id: uid('a'), data: el.querySelector('#naData').value, hora: el.querySelector('#naHora').value, clientes: [...sel], status: 'agendada', planos: {}, notas: {}, origem: 'manual' };
+      const data = el.querySelector('#naData').value, hora = el.querySelector('#naHora').value;
+      if (aula) {
+        Object.assign(aula, { data, hora, clientes: [...sel] });
+        Object.keys(aula.planos).forEach(c => { if (!sel.has(c)) delete aula.planos[c]; });
+        save(); closeSheet(); render(); return toast('Aula atualizada');
+      }
+      const a = { id: uid('a'), data, hora, clientes: [...sel], status: 'agendada', planos: {}, notas: {}, origem: 'manual' };
       state.aulas.push(a); save(); closeSheet(); ui.dia = a.data; go('#/aula/' + a.id);
     });
   });
@@ -612,6 +643,35 @@ function acharOuCriarCliente(nome) {
   return c;
 }
 
+function limparExemplo() {
+  const ids = new Set(state.clientes.filter(c => c.exemplo).map(c => c.id));
+  state.clientes = state.clientes.filter(c => !c.exemplo);
+  state.aulas = state.aulas.filter(a => a.origem !== 'exemplo' && !a.clientes.some(c => ids.has(c)));
+  state.exemplo = false; save();
+}
+
+// Aceita texto colado de planilha: colunas separadas por tab, ";" ou "|".
+const CABECALHO = /^(nome|paciente|cliente|aluno)s?$/i;
+const FONE = /^\+?[\d\s().-]{8,}$/;
+function importarClientes(txt) {
+  let novos = 0, atualizados = 0, inativos = 0;
+  for (const linha of txt.split('\n')) {
+    const cols = linha.split(/\t|;|\|/).map(x => x.trim()).filter(Boolean);
+    if (!cols.length || CABECALHO.test(cols[0])) continue;
+    const nome = cols[0].replace(/\s+/g, ' ');
+    const existia = state.clientes.some(x => x.nome.toLowerCase() === nome.toLowerCase());
+    const c = acharOuCriarCliente(nome);
+    existia ? atualizados++ : novos++;
+    const resto = cols.slice(1);
+    if (resto.some(x => /^inativ/i.test(x))) { c.inativo = true; inativos++; }
+    else if (resto.some(x => /^ativ/i.test(x))) c.inativo = false;
+    const fone = resto.find(x => FONE.test(x) && x.replace(/\D/g, '').length >= 8);
+    if (fone) c.telefone = fone;
+  }
+  save();
+  return { novos, atualizados, inativos };
+}
+
 function importarAgenda(txt) {
   let entradas = [];
   const t = txt.trim();
@@ -651,7 +711,8 @@ function planejar(a, forcar = false) {
 
 const acoes = {
   dia: el => { ui.dia = el.dataset.d; render(); },
-  'nova-aula': () => sheetNovaAula(),
+  'nova-aula': () => sheetAula(),
+  'editar-aula': el => sheetAula(state.aulas.find(x => x.id === el.dataset.a)),
   'planejar-semana': el => {
     const ini = el.dataset.d, t = hoje();
     let n = 0;
@@ -735,7 +796,8 @@ const acoes = {
   obj: el => { const c = cliente(el.dataset.c); const o = el.dataset.o; c.objetivos = (c.objetivos || []).includes(o) ? c.objetivos.filter(x => x !== o) : [...(c.objetivos || []), o]; save(); render(); },
   'add-restr': el => sheetRestricao(el.dataset.c),
   'tira-restr': el => { const c = cliente(el.dataset.c); c.restricoes = c.restricoes.filter(r => r.tag !== el.dataset.t); save(); render(); },
-  inativar: el => { if (!confirm('Marcar como inativo? Some da lista, mas o histórico fica guardado.')) return; cliente(el.dataset.c).inativo = true; save(); go('#/clientes'); },
+  ativo: el => { const c = cliente(el.dataset.c); c.inativo = !c.inativo; save(); render(); toast(c.inativo ? 'Marcado como inativo' : 'Cliente ativo de novo'); },
+  'cli-inativos': el => { ui.cliInativos = !!el.dataset.v; render(); },
 
   'f-ap': el => { ui.exFiltro.ap = el.dataset.v; render(); },
   'f-st': el => { ui.exFiltro.st = el.dataset.v; render(); },
@@ -752,13 +814,16 @@ const acoes = {
   'importar-agenda': () => {
     const txt = document.getElementById('agendaTxt').value;
     if (!txt.trim()) return toast('Cole a agenda primeiro');
+    if (state.exemplo) limparExemplo();
     try { const r = importarAgenda(txt); toast(`${r.novas} aula(s) nova(s) de ${r.total} linha(s)`); render(); }
     catch { toast('Não entendi o formato — confira o exemplo'); }
   },
   'importar-clientes': () => {
-    const nomes = document.getElementById('clientesTxt').value.split('\n').map(s => s.trim()).filter(Boolean);
-    const antes = state.clientes.length; nomes.forEach(acharOuCriarCliente); save();
-    toast(`${state.clientes.length - antes} cliente(s) adicionado(s)`); render();
+    const txt = document.getElementById('clientesTxt').value;
+    if (!txt.trim()) return toast('Cole a lista primeiro');
+    if (state.exemplo) limparExemplo();
+    const r = importarClientes(txt);
+    toast(`${r.novos} novo(s), ${r.atualizados} atualizado(s)${r.inativos ? ` · ${r.inativos} inativo(s)` : ''}`); render();
   },
   exportar: () => {
     const blob = new Blob([JSON.stringify(state, null, 1)], { type: 'application/json' });
@@ -767,10 +832,7 @@ const acoes = {
   },
   'limpar-exemplo': () => {
     if (!confirm('Remover todos os clientes e aulas de exemplo?')) return;
-    const ids = new Set(state.clientes.filter(c => c.exemplo).map(c => c.id));
-    state.clientes = state.clientes.filter(c => !c.exemplo);
-    state.aulas = state.aulas.filter(a => a.origem !== 'exemplo' && !a.clientes.some(c => ids.has(c)));
-    state.exemplo = false; save(); render(); toast('Pronto — app limpo para os clientes reais');
+    limparExemplo(); render(); toast('Pronto — app limpo para os clientes reais');
   },
 };
 

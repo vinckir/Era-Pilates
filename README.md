@@ -13,6 +13,8 @@ Não tem build: são arquivos estáticos prontos para o Netlify, e no celular el
   - Durante a aula, a Jessica toca para marcar o que foi feito e avalia com *fácil / ok / difícil / dor*.
   - As anotações podem ser **ditadas** (pt-BR). Quando o texto fala em dor, o app sugere registrar uma restrição.
 - **Clientes**: ficha com nível, restrições (fixas ou temporárias), objetivos, observações, evolução (aulas, exercícios diferentes, progressões, frequência semanal) e histórico.
+  Ativo/inativo por cliente (inativos saem da lista e da marcação de aulas, mas guardam o histórico). Importação colada direto de planilha (nome, telefone, situação).
+- **Duplas**: cada aula tem até 2 alunos, editáveis a qualquer momento; dá para cadastrar a segunda pessoa na hora, mesmo que ela não tenha cadastro no sistema de agendamento.
 - **Exercícios**: 140 na base inicial, com filtro por aparelho e status, **curadoria** (manter / arquivar / depois), nota pessoal, link de vídeo e foto própria.
 - **Mais**:
   - Liga e desliga os aparelhos do estúdio.
