@@ -7,7 +7,8 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 
 ## Estado atual (v0.3)
 - HTML/CSS/JS puro com ES modules, **sem build** e sem dependências. Os arquivos estáticos já estão prontos para o Netlify (`netlify.toml`).
-- Também está publicado como Artifact privado no claude.ai: https://claude.ai/artifact/9NGMuE1EdeUdtVGvHo5GNh (atualizar republicando `index.html` com os arquivos de `js/` e `styles.css`).
+- **App oficial: https://erapilates-app.netlify.app** (Netlify, conta do ERA, publica sozinho cada push na branch `main` do GitHub). Para publicar: commit e `git push origin HEAD:main`.
+- O Artifact do claude.ai (https://claude.ai/artifact/9NGMuE1EdeUdtVGvHo5GNh) ficou na versão anterior à nuvem e não é mais atualizado.
 - Os dados ficam no **localStorage** do aparelho (`era-pilates.v1`), com backup e restauração em JSON na tela *Mais*. **Ainda não há backend.**
 - Os dados reais (216 clientes e a agenda) foram exportados do Seu Fisio para `../Importacao App Aulas/`.
   - **No computador** (localhost), a pasta está ligada ao app como `.dados` (junção do Windows, no `.gitignore`) e o app importa sozinho ao abrir, e de novo quando os arquivos mudam (`sincronizarPastaLocal`).
@@ -89,7 +90,7 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 
 ## Próximos passos (roadmap)
 1. ~~Identidade visual oficial~~ (aplicada em 17/10/2026, a partir do Brand Book).
-2. **Servidor** (em andamento desde 17/10/2026): Supabase (dados numa linha jsonb `estados`, RLS por e-mail em `membros`, histórico de 30 versões) + Netlify (app instalável, publica a branch `main`). Passo a passo em `docs/servidor.md`, SQL em `supabase/schema.sql`. Supabase criado e ligado (`js/config.js`, `js/nuvem.js`, sem biblioteca: Auth e REST por fetch). Login único do estúdio (erapilatespoa@gmail.com, usuário criado no painel; cadastro aberto desligado). Sincronização: salva no aparelho e sobe 3 s depois de cada mudança; ao abrir, ao voltar para o app e a cada minuto baixa o que o outro aparelho salvou; em conflito, quem salva por último vale e a versão anterior fica em `estados_historico`. Antes de trocar os dados locais pelos da nuvem, guarda cópia em `localStorage['era-pilates.antes-da-nuvem']`. Falta: Netlify.
+2. **Servidor** (em andamento desde 17/10/2026): Supabase (dados numa linha jsonb `estados`, RLS por e-mail em `membros`, histórico de 30 versões) + Netlify (app instalável, publica a branch `main`). Passo a passo em `docs/servidor.md`, SQL em `supabase/schema.sql`. Supabase criado e ligado (`js/config.js`, `js/nuvem.js`, sem biblioteca: Auth e REST por fetch). Login único do estúdio (erapilatespoa@gmail.com, usuário criado no painel; cadastro aberto desligado). Sincronização: salva no aparelho e sobe 3 s depois de cada mudança; ao abrir, ao voltar para o app e a cada minuto baixa o que o outro aparelho salvou; em conflito, quem salva por último vale e a versão anterior fica em `estados_historico`. Antes de trocar os dados locais pelos da nuvem, guarda cópia em `localStorage['era-pilates.antes-da-nuvem']`. Netlify no ar desde 17/10/2026.
 3. Rotina semanal (domingo) que lê o Seu Fisio (veja `docs/seufisio-importacao.md`) e atualiza a agenda no app.
 4. Rotina com IA que lê as anotações e o histórico e prepara as sugestões da semana.
 5. Ilustrações, fotos ou vídeos dos exercícios.

@@ -1,5 +1,7 @@
 # Servidor: Supabase + Netlify
 
+**No ar desde 17/10/2026:** app em https://erapilates-app.netlify.app, banco no projeto Supabase `era-pilates` (São Paulo), login `erapilatespoa@gmail.com`.
+
 Objetivo: a Jessica usa o app no celular com os mesmos dados do computador.
 
 ## Como vai funcionar
