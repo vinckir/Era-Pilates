@@ -694,9 +694,12 @@ function importarClientes(txt) {
 }
 
 async function importarArquivos(files) {
+  importarLidos(await Promise.all([...files].map(async f => ({ nome: f.name, txt: await f.text() }))));
+}
+
+function importarLidos(lidos) {
   if (state.exemplo) limparExemplo();
   // Clientes primeiro, para a agenda achar os nomes já cadastrados.
-  const lidos = await Promise.all([...files].map(async f => ({ nome: f.name, txt: await f.text() })));
   lidos.sort((a, b) => (a.txt.trim().startsWith('{') ? 1 : 0) - (b.txt.trim().startsWith('{') ? 1 : 0));
   const msgs = [];
   for (const { txt } of lidos) {
@@ -705,6 +708,22 @@ async function importarArquivos(files) {
     else { const r = importarClientes(t); msgs.push(`${r.novos + r.atualizados} clientes (${r.novos + r.atualizados - r.inativos} ativos)`); }
   }
   render(); toast('Importado: ' + msgs.join(' · '));
+}
+
+// No computador, o app lê sozinho a pasta "Importacao App Aulas" (ligada como .dados).
+// Ela fica fora do GitHub e do link publicado; só existe neste PC. Reimporta quando os arquivos mudam.
+const ARQ_LOCAIS = ['clientes-erapilates.tsv', 'agenda-erapilates.json'];
+async function sincronizarPastaLocal() {
+  if (!['localhost', '127.0.0.1'].includes(location.hostname)) return;
+  const lidos = [];
+  for (const nome of ARQ_LOCAIS) {
+    try { const r = await fetch('.dados/' + nome, { cache: 'no-store' }); if (r.ok) lidos.push({ nome, txt: await r.text() }); } catch {}
+  }
+  if (!lidos.length) return;
+  const resumo = lidos.map(l => { let h = 5381; for (let i = 0; i < l.txt.length; i++) h = (h * 33 + l.txt.charCodeAt(i)) | 0; return `${l.nome}:${l.txt.length}:${h}`; }).join('|');
+  if (state.settings.pastaLocal === resumo) return;
+  state.settings.pastaLocal = resumo;
+  importarLidos(lidos);
 }
 
 function importarAgenda(txt) {
@@ -902,6 +921,7 @@ function reduzirFoto(file) {
 }
 
 render();
+sincronizarPastaLocal();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

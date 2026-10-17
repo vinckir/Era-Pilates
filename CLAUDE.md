@@ -9,7 +9,10 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - HTML/CSS/JS puro com ES modules, **sem build** e sem dependências. Os arquivos estáticos já estão prontos para o Netlify (`netlify.toml`).
 - Também está publicado como Artifact privado no claude.ai: https://claude.ai/artifact/9NGMuE1EdeUdtVGvHo5GNh (atualizar republicando `index.html` com os arquivos de `js/` e `styles.css`).
 - Os dados ficam no **localStorage** do aparelho (`era-pilates.v1`), com backup e restauração em JSON na tela *Mais*. **Ainda não há backend.**
-- Os dados reais (216 clientes e a agenda) foram exportados do Seu Fisio e importados **no aparelho**, pela tela *Mais → Importar do Seu Fisio*.
+- Os dados reais (216 clientes e a agenda) foram exportados do Seu Fisio para `../Importacao App Aulas/`.
+  - **No computador** (localhost), a pasta está ligada ao app como `.dados` (junção do Windows, no `.gitignore`) e o app importa sozinho ao abrir, e de novo quando os arquivos mudam (`sincronizarPastaLocal`).
+    Se a junção sumir: `New-Item -ItemType Junction -Path App\.dados -Target "..\Importacao App Aulas"`.
+  - **No link publicado / celular**, a importação é manual: *Mais → Importar do Seu Fisio*. O `.dados` nunca é publicado.
   **Nunca commitar dados de clientes** (nomes, telefones, agenda) no repositório.
 
 ## Arquivos
