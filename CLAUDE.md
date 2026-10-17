@@ -37,7 +37,7 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - `js/xlsx.js`: leitor de .xlsx sem biblioteca (DecompressionStream + DOMParser), para importar as planilhas do Seu Fisio direto, inclusive no celular.
 
 ## Modelo de dados (localStorage)
-`{ version:1, settings:{aparelhos, soBase}, exOverrides:{[exId]:{status,nota,video,foto,adiado}}, exCustom:[], clientes:[{id,nome,nivel,objetivos[],restricoes[{tag,desde,temporaria}],obs,favoritos[],inativo,soMassagem,telefone,plano,ultimoAtendimento,horarios[{dow,hora}],matricula,genero,cpf,nascimento,profissao,email,endereco,clienteDesde,cadastroEm,autorizaImagem,reposicoes,valorMensal,inicioPlano,fimPlano,inativoManual}], aulas:[{id,data,hora,clientes[≤2],status:'agendada'|'planejada'|'realizada',planos:{[clienteId]:{itens:[{exId,motivo,feito,fb}],aprovado}},notas:{[clienteId]:texto},presenca:{[clienteId]:'falta'|'justificada'},origem:'manual'|'importada'|'fixo'|'exemplo'}], excecoes:[{c,data,hora}] }`
+`{ version:1, settings:{aparelhos, soBase}, exOverrides:{[exId]:{status,nota,video,foto,adiado}}, exCustom:[], clientes:[{id,nome,nivel,objetivos[],restricoes[{tag,desde,temporaria}],obs,favoritos[],inativo,soMassagem,telefone,plano,ultimoAtendimento,horarios[{dow,hora}],matricula,genero,cpf,nascimento,profissao,email,endereco,clienteDesde,cadastroEm,autorizaImagem,reposicoes,valorMensal,inicioPlano,fimPlano,inativoManual}], aulas:[{id,data,hora,clientes[≤2],status:'agendada'|'planejada'|'realizada',planos:{[clienteId]:{itens:[{exId,motivo,feito,fb}],aprovado}},notas:{[clienteId]:texto},presenca:{[clienteId]:'falta'|'justificada'},origem:'manual'|'importada'|'fixo'|'exemplo'}], excecoes:[{c,data,hora}], lancamentos:[{id,tipo:'receber'|'pagar',clienteId,nome,descricao,categoria,centro,forma,vencimento,pagoEm,valor,origem:'seufisio'|'app'|'mensalidade',ref,editado}], excecoesFin:[{c,m}] }`
 
 ## Regras da marca no app (Brand Book)
 - Usar só as cores dos tokens. Texto principal café, nunca preto. Botão principal cacau com texto creme (`--primary`).
@@ -50,8 +50,16 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - `clientes-erapilates.tsv`: lista antiga (nome, telefone, situação, último atendimento, plano/“Só massagem”).
 - `clientes-seufisio-completo.xlsx`: Relatórios → Clientes → Geral, com as colunas marcadas (matrícula, CPF, nascimento, e-mail, endereço, profissão, cliente desde, uso de imagem, reposições). O cadastro no Seu Fisio é quase vazio (17/10/2026: 48 nascimentos, 26 CPFs, 31 endereços, 10 e-mails em 216).
 - `planos-fixos-erapilates.tsv`: Relatórios → Clientes → Planos Fixos (plano, valor mensal, início, fim, **horários programados**). É a fonte oficial dos horários fixos; vale mais que a detecção pela agenda.
+- `contas-receber-seufisio.xlsx` e `contas-pagar-seufisio.xlsx`: Relatórios → Conta a receber / Conta a pagar, vencimentos de 01/06/2025 a 31/12/2026. Viram `state.lancamentos` (chave `ref` = `sf-r-<Nº>` / `sf-p-<Nº>`, para reimportar sem duplicar).
 - `agenda-erapilates.json`: aulas futuras.
 - Ordem na importação: clientes → planos → agenda. Situação mudada à mão no app (`inativoManual`) e “só massagem” (`soMassagem`) não são sobrescritas pela situação do Seu Fisio.
+
+## Financeiro
+- Aba *Financeiro*: mês a mês, regime de caixa (recebido/pago pela data de pagamento; a receber/a pagar pelo vencimento), atrasadas, Pilates × massagem/drenagem (centro de custo pelo serviço).
+- Quitar, desfazer e excluir em folha; conta mexida no app ganha `editado` e a reimportação não sobrescreve.
+- Mensalidades: `gerarMensalidades()` lança a do mês atual e a do próximo para cada plano "N x semana" com valor, no dia do início do plano. Se o Seu Fisio já lançou a mesma mensalidade, vale a dele. Mensalidade excluída vira `excecoesFin` e não volta.
+- Conferido em 17/10/2026: totais iguais aos relatórios do Seu Fisio (R$ 175.720,00 a receber e R$ 155.198,99 a pagar) e ao fluxo de caixa de outubro.
+- Ainda não tem: despesas recorrentes automáticas (aluguel, Ceee...), recibo, cobrança por WhatsApp, fluxo de caixa por período.
 
 ## Regras de interface
 - Nada de `confirm()`/`alert()`/`prompt()`: dentro do claude.ai (moldura) e do painel do app eles não aparecem. Usar `confirmar()` (folha na própria tela).

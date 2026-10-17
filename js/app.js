@@ -119,7 +119,7 @@ window.addEventListener('hashchange', () => { closeSheet(); render(); window.scr
 
 function render() {
   const r = rota();
-  const views = { agenda: vAgenda, aula: vAula, clientes: vClientes, cliente: vCliente, exercicios: vExercicios, exercicio: vExercicio, curadoria: vCuradoria, mais: vMais };
+  const views = { agenda: vAgenda, aula: vAula, clientes: vClientes, cliente: vCliente, financeiro: vFinanceiro, exercicios: vExercicios, exercicio: vExercicio, curadoria: vCuradoria, mais: vMais };
   $app.innerHTML = (views[r.nome] || vAgenda)(r.id);
   const tab = { aula: 'agenda', cliente: 'clientes', exercicio: 'exercicios', curadoria: 'exercicios' }[r.nome] || r.nome;
   document.querySelectorAll('.tabbar a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
@@ -322,6 +322,21 @@ function vClientes() {
   </div>`;
 }
 
+function fichaFinanceiro(c) {
+  gerarMensalidades();
+  const ls = state.lancamentos.filter(l => l.clienteId === c.id && l.tipo === 'receber');
+  if (!ls.length) return '';
+  const abertos = ls.filter(l => !l.pagoEm).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+  const pagos = ls.filter(l => l.pagoEm).sort((a, b) => b.pagoEm.localeCompare(a.pagoEm));
+  const ano = hoje().slice(0, 4);
+  const noAno = somaLanc(pagos.filter(l => l.pagoEm.startsWith(ano)));
+  return `<div class="section"><div class="row between"><span class="eyebrow">Financeiro</span><button class="linkbtn" data-act="nova-conta" data-c="${c.id}">+ Conta</button></div>
+    ${abertos.map(l => linhaLanc(l, false)).join('')}
+    ${pagos.slice(0, 4).map(l => linhaLanc(l, false)).join('')}
+    <p class="tiny" style="margin-top:8px">Pago em ${ano}: ${brl(noAno)} · ${pagos.length} pagamento${pagos.length === 1 ? '' : 's'} no total</p>
+  </div>`;
+}
+
 function vCliente(id) {
   const c = cliente(id);
   if (!c) return `<div class="empty"><h2>Cliente não encontrado</h2><a class="btn" href="#/clientes">Voltar</a></div>`;
@@ -369,6 +384,8 @@ function vCliente(id) {
     ${vezesPlano(c) && vezesPlano(c) !== (c.horarios || []).length ? `<p class="tiny" style="margin-top:6px">Plano de ${vezesPlano(c)}x por semana, ${[`nenhum horário fixo`, `1 horário fixo`][(c.horarios || []).length] || `${c.horarios.length} horários fixos`}.</p>` : ''}
   </div>
 
+  ${fichaFinanceiro(c)}
+
   <div class="section"><span class="eyebrow">Nível</span>
     <div class="seg">${[[1, 'Básico'], [2, 'Intermediário'], [3, 'Avançado']].map(([n, t]) => `<button class="${c.nivel === n ? 'on' : ''}" data-act="nivel" data-c="${c.id}" data-n="${n}">${t}</button>`).join('')}</div>
   </div>
@@ -413,6 +430,138 @@ function vCliente(id) {
       </details>`;
     }).join('') || '<p class="muted">Ainda sem aulas registradas.</p>'}
   </div>`;
+}
+
+// ——— FINANCEIRO ———
+const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const somaLanc = ls => ls.reduce((s, l) => s + (l.valor || 0), 0);
+const mesAnterior = m => addDias(m + '-01', -1).slice(0, 7);
+const mesSeguinte = m => addDias(m + '-01', 32).slice(0, 7);
+
+function linhaLanc(l, comNome = true) {
+  const st = situacaoLanc(l);
+  const chip = st === 'pago' ? `<span class="chip sage">Paga ${dataCurta(l.pagoEm)}</span>` : st === 'atrasado' ? '<span class="chip warn">Atrasada</span>' : '<span class="chip">Aberta</span>';
+  return `<button class="lanc ${st}" data-act="lanc" data-id="${l.id}">
+    <div><div class="nome">${esc(comNome ? l.nome : l.descricao)}</div>
+      <div class="tiny">${esc(comNome ? l.descricao : '')}${comNome ? ' · ' : ''}vence ${dataCurta(l.vencimento)}${l.vencimento.slice(0, 4) !== hoje().slice(0, 4) ? '/' + l.vencimento.slice(2, 4) : ''}</div></div>
+    <div class="valor"><span>${brl(l.valor)}</span><br>${chip}</div>
+  </button>`;
+}
+
+function vFinanceiro() {
+  gerarMensalidades();
+  const m = ui.finMes || hoje().slice(0, 7);
+  const tipo = ui.finTipo || 'receber';
+  const L = state.lancamentos;
+  const pagosNoMes = t => L.filter(l => l.tipo === t && l.pagoEm && l.pagoEm.slice(0, 7) === m);
+  const abertosNoMes = t => L.filter(l => l.tipo === t && !l.pagoEm && l.vencimento.slice(0, 7) === m);
+  const recebido = somaLanc(pagosNoMes('receber')), pago = somaLanc(pagosNoMes('pagar'));
+  const aReceber = somaLanc(abertosNoMes('receber')), aPagar = somaLanc(abertosNoMes('pagar'));
+  const atrasadas = L.filter(l => l.tipo === 'receber' && situacaoLanc(l) === 'atrasado');
+  const porCentro = c => somaLanc(pagosNoMes('receber').filter(l => l.centro === c));
+  const ordem = { atrasado: 0, aberto: 1, pago: 2 };
+  const lista = [...abertosNoMes(tipo), ...pagosNoMes(tipo)].sort((a, b) => ordem[situacaoLanc(a)] - ordem[situacaoLanc(b)]
+    || (situacaoLanc(a) === 'pago' ? b.pagoEm.localeCompare(a.pagoEm) : a.vencimento.localeCompare(b.vencimento)));
+  const [ano, mes] = m.split('-');
+  return `
+  <header class="top"><div class="grow"><p class="eyebrow">Financeiro</p></div>
+    <button class="btn small" data-act="nova-conta">${I.plus} Conta</button></header>
+  <div class="fin-mes">
+    <button class="iconbtn" data-act="fin-mes" data-m="${mesAnterior(m)}" aria-label="Mês anterior">${I.back}</button>
+    <h1>${MESES[+mes - 1][0].toUpperCase() + MESES[+mes - 1].slice(1)} <em>${ano}</em></h1>
+    <button class="iconbtn" data-act="fin-mes" data-m="${mesSeguinte(m)}" aria-label="Próximo mês">${I.next}</button>
+  </div>
+
+  <div class="stats fin section">
+    <div class="stat"><b>${brl(recebido)}</b><span>Recebido</span></div>
+    <div class="stat"><b>${brl(aReceber)}</b><span>A receber</span></div>
+    <div class="stat"><b>${brl(pago)}</b><span>Pago</span></div>
+    <div class="stat"><b>${brl(aPagar)}</b><span>A pagar</span></div>
+  </div>
+  <p class="tiny fin-centros">Saldo do mês ${brl(recebido - pago)} · Pilates ${brl(porCentro('Pilates'))} · Massagem e drenagem ${brl(porCentro('Fisioterapia'))}</p>
+  ${atrasadas.length ? `<div class="alert" style="margin-top:12px"><b>${atrasadas.length} conta${atrasadas.length > 1 ? 's' : ''} atrasada${atrasadas.length > 1 ? 's' : ''}</b> · ${brl(somaLanc(atrasadas))}${atrasadas.some(l => l.vencimento.slice(0, 7) !== m) ? ' (inclui meses anteriores)' : ''}</div>` : ''}
+
+  <div class="seg section">
+    <button class="${tipo === 'receber' ? 'on' : ''}" data-act="fin-tipo" data-v="receber">Entradas</button>
+    <button class="${tipo === 'pagar' ? 'on' : ''}" data-act="fin-tipo" data-v="pagar">Saídas</button>
+  </div>
+  <div style="margin-top:6px">${lista.map(l => linhaLanc(l)).join('') || `<div class="empty"><p>Nenhuma ${tipo === 'receber' ? 'entrada' : 'saída'} neste mês.</p></div>`}</div>`;
+}
+
+const FORMAS = ['PIX', 'Dinheiro', 'Cartão de crédito', 'Cartão de débito', 'Transferência bancária', 'Boleto'];
+const CATEGORIAS = ['Fixa', 'Variável', 'Imposto', 'Pró-labore', 'Distribuição de Lucros', 'Material de expediente', 'Não Categorizada'];
+
+function sheetLanc(id) {
+  const l = state.lancamentos.find(x => x.id === id);
+  if (!l) return;
+  const st = situacaoLanc(l);
+  const linha = (k, v) => v ? `<div class="row between"><span class="muted">${k}</span><span>${v}</span></div>` : '';
+  sheet(`<h2>${esc(l.nome)}</h2>
+    <div class="card flat cadastro">
+      ${linha('Descrição', esc(l.descricao))}${linha('Valor', brl(l.valor))}${linha('Vencimento', dataLonga(l.vencimento))}
+      ${linha('Situação', { pago: 'Paga', atrasado: 'Atrasada', aberto: 'Aberta' }[st])}${linha('Pago em', l.pagoEm && dataLonga(l.pagoEm))}
+      ${linha('Forma', esc(l.forma))}${linha('Categoria', esc(l.categoria))}${linha('Centro de custo', esc(l.centro))}
+      ${l.clienteId ? `<a class="linkbtn" href="#/cliente/${l.clienteId}">Ver ficha</a>` : ''}
+    </div>
+    ${st === 'pago' ? `<button class="btn ghost block" id="lcDesfaz" style="margin-top:14px">Desfazer pagamento</button>` : `
+    <h3 style="margin-top:18px">${l.tipo === 'receber' ? 'Receber' : 'Pagar'}</h3>
+    <div class="row" style="flex-wrap:nowrap">
+      <label class="field" style="flex:1;margin:0"><span>Data</span><input type="date" id="lcData" value="${hoje()}"></label>
+      <label class="field" style="flex:1;margin:0"><span>Valor (R$)</span><input type="number" id="lcValor" step="0.01" inputmode="decimal" value="${l.valor}"></label>
+    </div>
+    <label class="field"><span>Forma</span><select id="lcForma">${FORMAS.map(f => `<option ${f === (l.forma || 'PIX') ? 'selected' : ''}>${f}</option>`).join('')}</select></label>
+    <button class="btn primary block" id="lcQuita" style="margin-top:14px">${I.check} Quitar</button>`}
+    <div style="text-align:center;margin-top:12px"><button class="linkbtn" id="lcExclui">Excluir esta conta</button></div>`, el => {
+    el.querySelector('#lcQuita')?.addEventListener('click', () => {
+      Object.assign(l, { pagoEm: el.querySelector('#lcData').value || hoje(), valor: +el.querySelector('#lcValor').value || l.valor, forma: el.querySelector('#lcForma').value, editado: true });
+      save(); closeSheet(); render(); toast(l.tipo === 'receber' ? 'Recebimento registrado' : 'Pagamento registrado');
+    });
+    el.querySelector('#lcDesfaz')?.addEventListener('click', () => { l.pagoEm = ''; l.editado = true; save(); closeSheet(); render(); toast('Pagamento desfeito'); });
+    el.querySelector('#lcExclui').addEventListener('click', () => confirmar('Excluir esta conta?', esc(`${l.nome} · ${brl(l.valor)}`), 'Excluir', () => {
+      if (l.origem === 'mensalidade' && l.clienteId) state.excecoesFin.push({ c: l.clienteId, m: l.vencimento.slice(0, 7) });
+      state.lancamentos = state.lancamentos.filter(x => x.id !== l.id);
+      save(); render(); toast('Conta excluída');
+    }));
+  });
+}
+
+function sheetNovaConta(clienteId = null) {
+  let tipo = 'receber';
+  const c0 = clienteId ? cliente(clienteId) : null;
+  const nomes = state.clientes.filter(c => !c.inativo).map(c => `<option value="${esc(c.nome)}">`).join('');
+  const descs = [...new Set(['Pilates 1 x semana', 'Pilates 2 x semana', 'Pilates 3 x semana', 'Pilates avulso', 'Pilates Experimental', 'Massagem terapêutica', 'Drenagem avulsa', 'Aluguel', 'Ceee', 'INSS', 'Simples Nacional', 'Contador - honorário prom.', ...state.lancamentos.map(l => l.descricao)].filter(Boolean))].map(d => `<option value="${esc(d)}">`).join('');
+  sheet(`<h2>Nova conta</h2>
+    <div class="seg" id="ncTipo"><button class="on" data-v="receber">Entrada</button><button data-v="pagar">Saída</button></div>
+    <label class="field"><span id="ncNomeRot">Cliente</span><input type="text" id="ncNome" list="ncNomes" value="${esc(c0?.nome || '')}"></label><datalist id="ncNomes">${nomes}</datalist>
+    <label class="field"><span>Descrição</span><input type="text" id="ncDesc" list="ncDescs" value="${esc(c0?.plano || '')}"></label><datalist id="ncDescs">${descs}</datalist>
+    <label class="field" id="ncCatBox" hidden><span>Categoria</span><select id="ncCat">${CATEGORIAS.map(x => `<option>${x}</option>`).join('')}</select></label>
+    <div class="row" style="flex-wrap:nowrap">
+      <label class="field" style="flex:1;margin-top:12px"><span>Valor (R$)</span><input type="number" id="ncValor" step="0.01" inputmode="decimal" value="${c0?.valorMensal || ''}"></label>
+      <label class="field" style="flex:1;margin-top:12px"><span>Vencimento</span><input type="date" id="ncVenc" value="${hoje()}"></label>
+    </div>
+    <div class="toggle"><span>Já está paga</span><button class="switch" id="ncPago" aria-label="Já está paga"></button></div>
+    <button class="btn primary block" id="ncOk" style="margin-top:14px">Salvar conta</button>`, el => {
+    el.querySelectorAll('#ncTipo button').forEach(b => b.addEventListener('click', () => {
+      tipo = b.dataset.v;
+      el.querySelectorAll('#ncTipo button').forEach(x => x.classList.toggle('on', x === b));
+      el.querySelector('#ncNomeRot').textContent = tipo === 'receber' ? 'Cliente' : 'Fornecedor';
+      el.querySelector('#ncCatBox').hidden = tipo === 'receber';
+      el.querySelector('#ncNome').setAttribute('list', tipo === 'receber' ? 'ncNomes' : '');
+    }));
+    const sw = el.querySelector('#ncPago'); sw.addEventListener('click', () => sw.classList.toggle('on'));
+    el.querySelector('#ncOk').addEventListener('click', () => {
+      const v = id => el.querySelector('#' + id).value.trim();
+      const valor = +v('ncValor');
+      if (!v('ncNome') && !v('ncDesc')) return toast('Diga de quem ou do que é a conta');
+      if (!valor) return toast('Informe o valor');
+      const c = tipo === 'receber' ? clientePorNome(v('ncNome')) : null;
+      state.lancamentos.push({ id: uid('f'), tipo, clienteId: c?.id || null, nome: c?.nome || v('ncNome') || v('ncDesc'), descricao: v('ncDesc'),
+        categoria: tipo === 'pagar' ? v('ncCat') : '', centro: tipo === 'receber' ? centroDe(v('ncDesc')) : '', forma: '',
+        vencimento: v('ncVenc') || hoje(), pagoEm: sw.classList.contains('on') ? (v('ncVenc') || hoje()) : '', valor, origem: 'app' });
+      ui.finMes = (v('ncVenc') || hoje()).slice(0, 7); ui.finTipo = tipo;
+      save(); closeSheet(); render(); toast('Conta salva');
+    });
+  });
 }
 
 // ——— EXERCÍCIOS ———
@@ -914,7 +1063,76 @@ function importarPlanos(txt) {
   return n;
 }
 
-const tipoArquivo = t => (t.startsWith('{') || t.startsWith('[')) ? 'agenda' : /hor[áa]rio/i.test(t.split('\n')[0]) ? 'planos' : 'clientes';
+const tipoArquivo = t => {
+  if (t.startsWith('{') || t.startsWith('[')) return 'agenda';
+  const cab = t.split('\n')[0].toLowerCase();
+  if (/fornecedor/.test(cab) || (/servi[çc]o\/produto/.test(cab) && /data venc/.test(cab))) return 'financeiro';
+  return /hor[áa]rio/.test(cab) ? 'planos' : 'clientes';
+};
+
+// ——— Financeiro: lançamentos de contas a receber e a pagar ———
+// state.lancamentos = [{ id, tipo: 'receber'|'pagar', clienteId, nome, descricao, categoria, centro, forma, vencimento, pagoEm, valor, origem, ref, editado }]
+const numBr = s => parseFloat(String(s ?? '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+const brl = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const chaveNome = n => (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+const clientePorNome = n => state.clientes.find(c => chaveNome(c.nome) === chaveNome(n));
+const centroDe = servico => /pilates/i.test(servico || '') ? 'Pilates' : servico ? 'Fisioterapia' : '';
+const ehMensalidade = d => /x\s*semana/i.test(d || '');
+const situacaoLanc = l => l.pagoEm ? 'pago' : l.vencimento < hoje() ? 'atrasado' : 'aberto';
+
+function importarFinanceiro(txt) {
+  const linhas = txt.split('\n').map(l => l.replace(/\r$/, '').split('\t').map(x => x.trim()));
+  const cab = linhas[0].map(h => h.toLowerCase());
+  const col = re => cab.findIndex(h => re.test(h));
+  const pagar = cab.some(h => /fornecedor/.test(h));
+  const tipo = pagar ? 'pagar' : 'receber';
+  const ix = { n: col(/^n[º°o]/), nome: col(pagar ? /fornecedor/ : /cliente/), desc: col(pagar ? /t[íi]tulo/ : /servi[çc]o/), cat: col(/categoria/),
+    forma: col(/pagamento/), venc: col(/venc/), pag: col(/data pag/), sit: col(/situa/), valor: col(/valor/) };
+  let n = 0;
+  const meses = new Set();
+  for (const b of linhas.slice(1)) {
+    const pega = k => (ix[k] >= 0 ? b[ix[k]] || '' : '');
+    if (!/^\d+$/.test(pega('n'))) continue;
+    const ref = `sf-${tipo[0]}-${pega('n')}`;
+    const atual = state.lancamentos.find(l => l.ref === ref);
+    if (atual?.editado) continue;
+    const pago = /^paga/i.test(pega('sit'));
+    const c = pagar ? null : clientePorNome(pega('nome'));
+    const dados = {
+      tipo, clienteId: c?.id || null, nome: c?.nome || pega('nome') || pega('desc'), descricao: pega('desc'), categoria: pega('cat'),
+      centro: pagar ? '' : centroDe(pega('desc')), forma: pega('forma'), vencimento: dataBr(pega('venc')),
+      pagoEm: pago ? dataBr(pega('pag')) || dataBr(pega('venc')) : '', valor: numBr(pega('valor')), origem: 'seufisio', ref,
+    };
+    if (!dados.vencimento) continue;
+    if (atual) Object.assign(atual, dados); else state.lancamentos.push({ id: uid('f'), ...dados });
+    if (c && ehMensalidade(dados.descricao)) meses.add(c.id + ' ' + dados.vencimento.slice(0, 7));
+    n++;
+  }
+  // A mensalidade que o Seu Fisio já lançou substitui a gerada pelo app no mesmo mês (se ainda não foi paga).
+  state.lancamentos = state.lancamentos.filter(l => !(l.origem === 'mensalidade' && !l.pagoEm && meses.has(l.clienteId + ' ' + l.vencimento.slice(0, 7))));
+  save();
+  return { n, tipo };
+}
+
+// Mensalidade do plano: o app lança a do mês atual e a do próximo, no dia do início do plano.
+function gerarMensalidades() {
+  const h = hoje(), m0 = h.slice(0, 7), m1 = addDias(m0 + '-01', 32).slice(0, 7);
+  let mudou = false;
+  for (const c of state.clientes) {
+    if (c.inativo || !c.valorMensal || !ehMensalidade(c.plano)) continue;
+    const dia = c.inicioPlano ? +c.inicioPlano.slice(8) : 1;
+    for (const m of [m0, m1]) {
+      if ((c.inicioPlano && m < c.inicioPlano.slice(0, 7)) || (c.fimPlano && m > c.fimPlano.slice(0, 7))) continue;
+      if (state.excecoesFin.some(e => e.c === c.id && e.m === m)) continue;
+      if (state.lancamentos.some(l => l.tipo === 'receber' && l.clienteId === c.id && ehMensalidade(l.descricao) && l.vencimento.slice(0, 7) === m)) continue;
+      const ultimo = new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate();
+      state.lancamentos.push({ id: uid('f'), tipo: 'receber', clienteId: c.id, nome: c.nome, descricao: c.plano, categoria: '', centro: 'Pilates', forma: '',
+        vencimento: `${m}-${String(Math.min(dia, ultimo)).padStart(2, '0')}`, pagoEm: '', valor: c.valorMensal, origem: 'mensalidade' });
+      mudou = true;
+    }
+  }
+  if (mudou) save();
+}
 
 async function lerArquivo(f) {
   return /\.xlsx$/i.test(f.name) ? xlsxParaTsv(await f.arrayBuffer()) : f.text();
@@ -927,12 +1145,13 @@ async function importarArquivos(files) {
 function importarLidos(lidos) {
   if (state.exemplo) limparExemplo();
   // Clientes primeiro, depois os planos (horários fixos) e por fim a agenda, que acha os nomes já cadastrados.
-  const ordem = { clientes: 0, planos: 1, agenda: 2 };
+  const ordem = { clientes: 0, planos: 1, financeiro: 2, agenda: 3 };
   lidos.sort((a, b) => ordem[tipoArquivo(a.txt.trim())] - ordem[tipoArquivo(b.txt.trim())]);
   const msgs = [];
   for (const { txt } of lidos) {
     const t = txt.trim();
     if (tipoArquivo(t) === 'planos') { msgs.push(`${importarPlanos(t)} planos com horário`); continue; }
+    if (tipoArquivo(t) === 'financeiro') { const r = importarFinanceiro(t); msgs.push(`${r.n} contas a ${r.tipo}`); continue; }
     if (t.startsWith('{') || t.startsWith('[')) {
       const r = importarAgenda(t); msgs.push(`${r.novas} aulas`);
       const nf = detectarFixos(); if (nf) msgs.push(`${nf} com horário fixo`);
@@ -944,7 +1163,8 @@ function importarLidos(lidos) {
 
 // No computador, o app lê sozinho a pasta "Importacao App Aulas" (ligada como .dados).
 // Ela fica fora do GitHub e do link publicado; só existe neste PC. Reimporta quando os arquivos mudam.
-const ARQ_LOCAIS = ['clientes-erapilates.tsv', 'clientes-seufisio-completo.xlsx', 'planos-fixos-erapilates.tsv', 'agenda-erapilates.json'];
+const ARQ_LOCAIS = ['clientes-erapilates.tsv', 'clientes-seufisio-completo.xlsx', 'planos-fixos-erapilates.tsv',
+  'contas-receber-seufisio.xlsx', 'contas-pagar-seufisio.xlsx', 'agenda-erapilates.json'];
 async function sincronizarPastaLocal() {
   if (!['localhost', '127.0.0.1'].includes(location.hostname)) return;
   const lidos = [];
@@ -1018,6 +1238,10 @@ const acoes = {
     save(); render();
   },
   'add-hr': el => sheetHorario(el.dataset.c),
+  lanc: el => sheetLanc(el.dataset.id),
+  'nova-conta': el => sheetNovaConta(el.dataset.c || null),
+  'fin-mes': el => { ui.finMes = el.dataset.m; render(); },
+  'fin-tipo': el => { ui.finTipo = el.dataset.v; render(); },
   'tira-hr': el => {
     const c = cliente(el.dataset.c), [h] = c.horarios.splice(+el.dataset.i, 1), t = hoje();
     // Sai das próximas aulas criadas por esse horário (as já realizadas ficam no histórico).
@@ -1174,6 +1398,8 @@ function reduzirFoto(file) {
 }
 
 state.excecoes = state.excecoes || [];
+state.lancamentos = state.lancamentos || [];
+state.excecoesFin = state.excecoesFin || [];
 if (!state.settings.fixosDetectados) detectarFixos();
 render();
 sincronizarPastaLocal();
