@@ -173,7 +173,7 @@ button.chip { height: 32px; padding: 0 13px; font-size: 13.5px; }
 .linkbtn { font-size: 13px; color: var(--ink-2); padding: 6px 4px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
 
 .notes { position: relative; }
-textarea, input[type=text], input[type=search], input[type=time], input[type=date], input[type=url], select {
+textarea, input[type=text], input[type=search], input[type=time], input[type=date], input[type=url], input[type=email], input[type=password], input[type=tel], input[type=number], select {
   width: 100%; border: 1px solid var(--line); background: var(--field); border-radius: var(--radius-sm); padding: 12px 14px; outline: none;
 }
 textarea { min-height: 96px; resize: vertical; padding-right: 56px; }
@@ -268,6 +268,13 @@ textarea:focus, input:focus, select:focus { border-color: var(--accent); }
 .switch.on::after { transform: translateX(18px); }
 label.field { display: block; margin-top: 12px; }
 label.field > span { display: block; font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
+
+/* Login */
+body.login .tabbar { display: none; }
+body.login { padding-bottom: 0; }
+.login-tela { max-width: 380px; margin: 0 auto; padding: calc(48px + env(safe-area-inset-top)) 4px 40px; }
+.login-tela .brand { --h: 64px; margin-bottom: 36px; }
+.login-tela h1 { margin-bottom: 6px; }
 
 /* Agenda: visão da semana em grade */
 .vista { margin: 6px 0 12px; }

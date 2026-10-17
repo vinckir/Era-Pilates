@@ -1,9 +1,9 @@
 // Cache simples para o app abrir mesmo sem internet no estúdio.
-const CACHE = 'era-pilates-v10';
+const CACHE = 'era-pilates-v11';
 const ARQUIVOS = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'icon-180.png', 'icon-192.png', 'icon-512.png', 'brand/logo-simbolo.png', 'brand/logo-palavra.png', 'brand/favicon-32.png',
-  'js/app.js', 'js/store.js', 'js/sugestao.js', 'js/exercicios.js', 'js/pictos.js', 'js/xlsx.js',
+  'js/app.js', 'js/store.js', 'js/sugestao.js', 'js/exercicios.js', 'js/pictos.js', 'js/xlsx.js', 'js/nuvem.js', 'js/config.js',
 ];
 
 self.addEventListener('install', ev => {
@@ -16,7 +16,7 @@ self.addEventListener('activate', ev => {
 
 // Rede primeiro (pega atualizações do Netlify), cache se estiver offline.
 self.addEventListener('fetch', ev => {
-  if (ev.request.method !== 'GET' || ev.request.url.includes('/.dados/')) return;
+  if (ev.request.method !== 'GET' || ev.request.url.includes('/.dados/') || new URL(ev.request.url).origin !== self.location.origin) return;
   ev.respondWith(
     fetch(ev.request)
       .then(r => { const copia = r.clone(); caches.open(CACHE).then(c => c.put(ev.request, copia)); return r; })

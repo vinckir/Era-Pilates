@@ -89,7 +89,7 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 
 ## Próximos passos (roadmap)
 1. ~~Identidade visual oficial~~ (aplicada em 17/10/2026, a partir do Brand Book).
-2. **Servidor** (em andamento desde 17/10/2026): Supabase (dados numa linha jsonb `estados`, RLS por e-mail em `membros`, histórico de 30 versões) + Netlify (app instalável, publica a branch `main`). Passo a passo em `docs/servidor.md`, SQL em `supabase/schema.sql`. Esperando o Vinícius criar as contas e mandar URL + chave anon.
+2. **Servidor** (em andamento desde 17/10/2026): Supabase (dados numa linha jsonb `estados`, RLS por e-mail em `membros`, histórico de 30 versões) + Netlify (app instalável, publica a branch `main`). Passo a passo em `docs/servidor.md`, SQL em `supabase/schema.sql`. Supabase criado e ligado (`js/config.js`, `js/nuvem.js`, sem biblioteca: Auth e REST por fetch). Login único do estúdio (erapilatespoa@gmail.com, usuário criado no painel; cadastro aberto desligado). Sincronização: salva no aparelho e sobe 3 s depois de cada mudança; ao abrir, ao voltar para o app e a cada minuto baixa o que o outro aparelho salvou; em conflito, quem salva por último vale e a versão anterior fica em `estados_historico`. Antes de trocar os dados locais pelos da nuvem, guarda cópia em `localStorage['era-pilates.antes-da-nuvem']`. Falta: Netlify.
 3. Rotina semanal (domingo) que lê o Seu Fisio (veja `docs/seufisio-importacao.md`) e atualiza a agenda no app.
 4. Rotina com IA que lê as anotações e o histórico e prepara as sugestões da semana.
 5. Ilustrações, fotos ou vídeos dos exercícios.

@@ -1,9 +1,10 @@
 import { BLOCOS, APARELHOS, RESTRICOES, OBJETIVOS } from './exercicios.js';
 import { picto } from './pictos.js';
 import { xlsxParaTsv } from './xlsx.js';
+import * as nuvem from './nuvem.js';
 import { sugerirPlano, alternativas, detectarRestricoes, historico } from './sugestao.js';
 import {
-  state, save, replaceState, exercicios, exercicio, setExercicio, cliente,
+  state, save, replaceState, aoSalvar, exercicios, exercicio, setExercicio, cliente,
   iso, parseIso, addDias, inicioSemana, hoje, uid,
 } from './store.js';
 
@@ -121,11 +122,101 @@ const go = h => { location.hash = h; };
 window.addEventListener('hashchange', () => { closeSheet(); render(); window.scrollTo(0, 0); });
 
 function render() {
+  if (precisaLogin()) { $app.innerHTML = vLogin(); document.body.classList.add('login'); return; }
+  document.body.classList.remove('login');
   const r = rota();
   const views = { agenda: vAgenda, aula: vAula, clientes: vClientes, cliente: vCliente, financeiro: vFinanceiro, exercicios: vExercicios, exercicio: vExercicio, curadoria: vCuradoria, mais: vMais };
   $app.innerHTML = (views[r.nome] || vAgenda)(r.id);
   const tab = { aula: 'agenda', cliente: 'clientes', exercicio: 'exercicios', curadoria: 'exercicios' }[r.nome] || r.nome;
   document.querySelectorAll('.tabbar a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
+}
+
+// ——— Nuvem (Supabase): login e sincronização entre celular e computador ———
+const semNuvem = () => { try { return localStorage.getItem('era-pilates.semNuvem') === '1'; } catch { return false; } };
+const precisaLogin = () => nuvem.nuvemLigada() && !nuvem.sessao() && !semNuvem();
+let aplicandoRemoto = false, subindo = false, timerSubida = null, statusNuvem = '';
+
+function vLogin() {
+  return `<div class="login-tela">
+    <div class="brand" role="img" aria-label="ERA Pilates"><i class="sym"></i><i class="word"></i></div>
+    <h1>Entrar</h1>
+    <p class="muted">Use o e-mail e a senha do estúdio. Os dados ficam iguais no celular e no computador.</p>
+    <label class="field"><span>E-mail</span><input type="email" id="lgEmail" autocomplete="username" inputmode="email"></label>
+    <label class="field"><span>Senha</span><input type="password" id="lgSenha" autocomplete="current-password"></label>
+    <div class="alert" id="lgErro" style="margin-top:12px" hidden></div>
+    <button class="btn primary block" id="lgOk" data-act="entrar" style="margin-top:16px">Entrar</button>
+    <div style="text-align:center;margin-top:16px"><button class="linkbtn" data-act="sem-nuvem">Usar só neste aparelho</button></div>
+  </div>`;
+}
+
+const horaCurta = iso => iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+const editando = () => !!document.querySelector('.sheet-bg') || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
+
+function agendarSubida() {
+  if (aplicandoRemoto || !nuvem.nuvemLigada() || !nuvem.sessao()) return;
+  nuvem.marcarPendente();
+  clearTimeout(timerSubida);
+  timerSubida = setTimeout(subir, 3000);
+}
+aoSalvar(agendarSubida);
+
+async function subir() {
+  if (!nuvem.sessao()) return;
+  if (subindo) { agendarSubida(); return; }
+  subindo = true;
+  try {
+    const r = await nuvem.enviar(state);
+    statusNuvem = '';
+    if (r.sobrescreveu) toast('Outro aparelho tinha salvo antes; a versão dele ficou guardada no histórico');
+  } catch (e) {
+    statusNuvem = e.message;
+    if (e.tipo === 'acesso' && !nuvem.sessao()) render();
+    else setTimeout(() => { if (nuvem.meta().pendente) subir(); }, 30000);
+  } finally { subindo = false; }
+}
+
+// Ao abrir, ao voltar para o app e de minuto em minuto: traz o que o outro aparelho salvou.
+async function sincronizarNuvem({ inicial = false } = {}) {
+  if (!nuvem.nuvemLigada() || !nuvem.sessao() || subindo) return;
+  const m = nuvem.meta();
+  try {
+    const remota = await nuvem.versaoRemota();
+    if (remota == null) {
+      if (!state.exemplo || state.clientes.some(c => !c.exemplo)) { await subir(); if (!statusNuvem) toast('Dados enviados para a nuvem'); }
+      return;
+    }
+    if (m.versao === remota) { if (m.pendente) await subir(); statusNuvem = ''; return; }
+    if (!inicial && editando()) return;
+    if (m.pendente || m.versao == null) {
+      try { localStorage.setItem('era-pilates.antes-da-nuvem', JSON.stringify(state)); } catch {}
+    }
+    const r = await nuvem.baixar();
+    aplicandoRemoto = true;
+    try { replaceState(r.dados); } finally { aplicandoRemoto = false; }
+    nuvem.marcarBaixado(r.versao);
+    statusNuvem = '';
+    render();
+    if (!inicial) toast('Atualizado com o outro aparelho');
+  } catch (e) {
+    statusNuvem = e.message;
+    if (e.tipo === 'acesso' && !nuvem.sessao()) render();
+  }
+}
+
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sincronizarNuvem(); });
+window.addEventListener('online', () => { if (nuvem.meta().pendente) subir(); else sincronizarNuvem(); });
+setInterval(() => { if (document.visibilityState === 'visible' && !nuvem.meta().pendente) sincronizarNuvem(); }, 60000);
+
+function blocoNuvem() {
+  if (!nuvem.nuvemLigada()) return '';
+  const s = nuvem.sessao(), m = nuvem.meta();
+  if (!s) return `<div class="section"><span class="eyebrow">Nuvem</span>
+    <p class="muted">Usando só neste aparelho. Entre para ver os mesmos dados no celular e no computador.</p>
+    <button class="btn" data-act="entrar-nuvem">Entrar</button></div>`;
+  return `<div class="section"><span class="eyebrow">Nuvem</span>
+    <p class="muted">Conectado como ${esc(s.email || '')}.<br>${m.pendente ? 'Alterações esperando para subir.' : m.ultima ? `Sincronizado às ${horaCurta(m.ultima)}.` : ''}</p>
+    ${statusNuvem ? `<div class="alert" style="margin-bottom:10px">${esc(statusNuvem)}</div>` : ''}
+    <div class="row"><button class="btn" data-act="sync-agora">Sincronizar agora</button><button class="btn ghost" data-act="sair-nuvem">Sair</button></div></div>`;
 }
 
 // ——— AGENDA ———
@@ -913,6 +1004,8 @@ function vMais() {
       <button class="switch ${state.settings.soBase ? 'on' : ''}" data-act="soBase" aria-label="Só aprovados"></button></div>
   </div>
 
+  ${blocoNuvem()}
+
   <div class="section"><span class="eyebrow">Cobrança</span>
     <label class="field"><span>Chave PIX (vai na mensagem de cobrança)</span><input type="text" id="cfgPix" value="${esc(state.settings.pix || '')}" placeholder="CNPJ, e-mail, telefone ou chave aleatória"></label>
     <label class="field"><span>Assinatura</span><input type="text" id="cfgAss" value="${esc(state.settings.assinatura || 'Jessica · ERA Pilates')}"></label>
@@ -1521,6 +1614,22 @@ const acoes = {
     save(); render(); toast(`${n} aula${n > 1 ? 's' : ''} com sugestão pronta`);
   },
   aluno: el => { ui.aluno[el.dataset.a] = el.dataset.c; render(); },
+  entrar: async el => {
+    const email = document.getElementById('lgEmail').value, senha = document.getElementById('lgSenha').value, erro = document.getElementById('lgErro');
+    if (!email || !senha) { erro.textContent = 'Preencha e-mail e senha'; erro.hidden = false; return; }
+    el.disabled = true; el.textContent = 'Entrando…';
+    try {
+      await nuvem.entrar(email, senha);
+      render();
+      await sincronizarNuvem({ inicial: true });
+    } catch (e) {
+      erro.textContent = e.message; erro.hidden = false; el.disabled = false; el.textContent = 'Entrar';
+    }
+  },
+  'sem-nuvem': () => { try { localStorage.setItem('era-pilates.semNuvem', '1'); } catch {} render(); },
+  'entrar-nuvem': () => { try { localStorage.removeItem('era-pilates.semNuvem'); } catch {} render(); },
+  'sync-agora': async () => { toast('Sincronizando…'); if (nuvem.meta().pendente) await subir(); else await sincronizarNuvem(); render(); toast(statusNuvem || 'Tudo sincronizado'); },
+  'sair-nuvem': () => confirmar('Sair da conta?', 'Os dados continuam neste aparelho; para ver alterações de outro aparelho, entre de novo.', 'Sair', () => { nuvem.sair(); render(); }),
   vista: el => { ui.vista = el.dataset.v; render(); },
   'dia-lista': el => { ui.dia = el.dataset.d; ui.vista = 'dia'; render(); },
   presenca: el => {
@@ -1655,6 +1764,8 @@ document.addEventListener('click', ev => {
   if (fn) { ev.preventDefault(); fn(el); }
 });
 
+document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && (ev.target.id === 'lgSenha' || ev.target.id === 'lgEmail')) document.getElementById('lgOk')?.click(); });
+
 document.addEventListener('input', ev => {
   const t = ev.target;
   if (t.id === 'cliQ') { ui.cliQ = t.value; const pos = t.selectionStart; render(); const n = document.getElementById('cliQ'); n.focus(); n.setSelectionRange(pos, pos); }
@@ -1703,7 +1814,7 @@ state.recorrentes = state.recorrentes || [];
 if (!state.settings.recorrentesDetectados && state.lancamentos.some(l => l.tipo === 'pagar')) detectarRecorrentes();
 if (!state.settings.fixosDetectados) detectarFixos();
 render();
-sincronizarPastaLocal();
+sincronizarPastaLocal().finally(() => sincronizarNuvem({ inicial: true }));
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

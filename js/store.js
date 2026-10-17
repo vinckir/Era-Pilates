@@ -7,8 +7,13 @@ import { sugerirPlano } from './sugestao.js';
 
 const KEY = 'era-pilates.v1';
 
+let ouvinte = null;
+// O app avisa a nuvem a cada gravação (ver sincronização em app.js).
+export const aoSalvar = f => { ouvinte = f; };
+
 export function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn('Não salvou', e); }
+  ouvinte?.();
 }
 
 function load() {
