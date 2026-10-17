@@ -10,7 +10,7 @@ const COTAS = { centro: 0, aquec: 1, abd: 2, coluna: 1, mmii: 1, lateral: 1, ext
 
 export function historico(state, clienteId, antesDe) {
   return state.aulas
-    .filter(a => a.status === 'realizada' && a.clientes.includes(clienteId) && (!antesDe || a.data < antesDe))
+    .filter(a => a.status === 'realizada' && a.clientes.includes(clienteId) && !a.presenca?.[clienteId] && (!antesDe || a.data < antesDe))
     .sort((a, b) => (b.data + b.hora).localeCompare(a.data + a.hora));
 }
 

@@ -135,6 +135,7 @@ button.chip { height: 32px; padding: 0 13px; font-size: 13.5px; }
 .status.planejada { background: var(--gold); }
 .status.aprovada { background: var(--sage); }
 .status.realizada { background: var(--primary); }
+.status.falta { background: var(--warn); }
 
 .empty { text-align: center; padding: 40px 12px; color: var(--ink-2); }
 .empty h2 { color: var(--ink); margin-bottom: 6px; }

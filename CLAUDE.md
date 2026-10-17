@@ -36,7 +36,7 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 - `docs/seufisio-importacao.md`: como extrair clientes e agenda do Seu Fisio.
 
 ## Modelo de dados (localStorage)
-`{ version:1, settings:{aparelhos, soBase}, exOverrides:{[exId]:{status,nota,video,foto,adiado}}, exCustom:[], clientes:[{id,nome,nivel,objetivos[],restricoes[{tag,desde,temporaria}],obs,favoritos[],inativo,soMassagem,telefone,plano,ultimoAtendimento}], aulas:[{id,data,hora,clientes[≤2],status:'agendada'|'planejada'|'realizada',planos:{[clienteId]:{itens:[{exId,motivo,feito,fb}],aprovado}},notas:{[clienteId]:texto},origem}] }`
+`{ version:1, settings:{aparelhos, soBase}, exOverrides:{[exId]:{status,nota,video,foto,adiado}}, exCustom:[], clientes:[{id,nome,nivel,objetivos[],restricoes[{tag,desde,temporaria}],obs,favoritos[],inativo,soMassagem,telefone,plano,ultimoAtendimento,horarios[{dow,hora}]}], aulas:[{id,data,hora,clientes[≤2],status:'agendada'|'planejada'|'realizada',planos:{[clienteId]:{itens:[{exId,motivo,feito,fb}],aprovado}},notas:{[clienteId]:texto},presenca:{[clienteId]:'falta'|'justificada'},origem:'manual'|'importada'|'fixo'|'exemplo'}], excecoes:[{c,data,hora}] }`
 
 ## Regras da marca no app (Brand Book)
 - Usar só as cores dos tokens. Texto principal café, nunca preto. Botão principal cacau com texto creme (`--primary`).
@@ -48,6 +48,13 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 ## Regras de interface
 - Nada de `confirm()`/`alert()`/`prompt()`: dentro do claude.ai (moldura) e do painel do app eles não aparecem. Usar `confirmar()` (folha na própria tela).
 - Tela *Mais* sem código, JSON ou formato técnico à vista: a Jessica só escolhe os arquivos do Seu Fisio.
+
+## Agenda e horários fixos
+- `cliente.horarios` (dia da semana `dow`, 0 = domingo, e hora) vira aula toda semana: `gerarFixas()` cria as aulas da semana vista na agenda e das próximas semanas, a partir de hoje e depois de `settings.fixoDesde` (dia seguinte à última aula importada do Seu Fisio).
+- Na importação da agenda, `detectarFixos()` dá horário fixo a quem repete o mesmo dia e hora em semanas diferentes.
+- Tirar um cliente de uma aula fixa, mudar a data/hora ou remover a aula grava uma exceção (`state.excecoes`), para a aula não voltar.
+- Presença por aluno: Presente / Faltou / Avisou (`aula.presenca`). Falta não entra no histórico do motor de sugestões.
+- Ainda não tem: reposição de falta avisada, salas, bloqueios (feriado), vigência do plano.
 
 ## Regras de negócio já decididas
 - Cada aula tem **1 ou 2 alunos** (dupla). No Seu Fisio, a dupla é feita de dois atendimentos separados no mesmo horário. Na importação, o app junta quem tem o mesmo data+hora.

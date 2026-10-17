@@ -47,6 +47,7 @@ function toast(msg) {
 }
 
 function statusAula(a) {
+  if (a.clientes.length && a.clientes.every(c => a.presenca?.[c])) return { cls: 'falta', txt: a.clientes.length > 1 ? 'Faltaram' : 'Falta' };
   if (a.status === 'realizada') return { cls: 'realizada', txt: 'Realizada' };
   const planos = a.clientes.map(c => a.planos[c]);
   if (planos.length && planos.every(p => p?.aprovado)) return { cls: 'aprovada', txt: 'Plano aprovado' };
@@ -56,6 +57,55 @@ function statusAula(a) {
 
 function aulasDoDia(d) {
   return state.aulas.filter(a => a.data === d).sort((a, b) => a.hora.localeCompare(b.hora));
+}
+
+// ——— Horários fixos: o horário do plano vira aula toda semana ———
+// cliente.horarios = [{ dow (0 = domingo), hora }]. Aula tirada ou mudada de um horário fixo vira exceção,
+// para não voltar a aparecer. As aulas são criadas a partir de hoje (e depois da última agenda importada).
+const DIA_CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const vezesPlano = c => +((c.plano || '').match(/(\d)\s*x/i)?.[1] || 0);
+const temExcecao = (cId, data, hora) => state.excecoes.some(e => e.c === cId && e.data === data && e.hora === hora);
+const fixoEm = (cId, data, hora) => !!cliente(cId)?.horarios?.some(h => h.dow === parseIso(data).getDay() && h.hora === hora);
+function excecaoFixa(cId, data, hora) {
+  if (fixoEm(cId, data, hora) && !temExcecao(cId, data, hora)) state.excecoes.push({ c: cId, data, hora });
+}
+
+function gerarFixas(ini, fim) {
+  const desde = [hoje(), ini, state.settings.fixoDesde || ''].sort().pop();
+  let mudou = false;
+  for (let d = desde; d <= fim; d = addDias(d, 1)) {
+    const dow = parseIso(d).getDay();
+    for (const c of state.clientes) {
+      if (c.inativo || !c.horarios?.length) continue;
+      for (const h of c.horarios) {
+        if (h.dow !== dow || temExcecao(c.id, d, h.hora)) continue;
+        if (state.aulas.some(a => a.data === d && a.clientes.includes(c.id))) continue;
+        const a = state.aulas.find(x => x.data === d && x.hora === h.hora);
+        if (a) { if (a.clientes.length < 2 && a.status !== 'realizada') { a.clientes.push(c.id); mudou = true; } }
+        else { state.aulas.push({ id: uid('a'), data: d, hora: h.hora, clientes: [c.id], status: 'agendada', planos: {}, notas: {}, origem: 'fixo' }); mudou = true; }
+      }
+    }
+  }
+  if (mudou) save();
+}
+
+// Na agenda importada do Seu Fisio, quem repete o mesmo dia e hora em semanas diferentes ganha esse horário fixo.
+function detectarFixos() {
+  state.settings.fixosDetectados = true;
+  const imp = state.aulas.filter(a => a.origem === 'importada');
+  if (!imp.length) return 0;
+  const depois = addDias(imp.map(a => a.data).sort().pop(), 1);
+  if ((state.settings.fixoDesde || '') < depois) state.settings.fixoDesde = depois;
+  let n = 0;
+  for (const c of state.clientes) {
+    if (c.inativo || c.horarios?.length) continue;
+    const semanas = {};
+    imp.filter(a => a.clientes.includes(c.id)).forEach(a => { const k = parseIso(a.data).getDay() + ' ' + a.hora; (semanas[k] ||= new Set()).add(inicioSemana(a.data)); });
+    const hs = Object.entries(semanas).filter(([, s]) => s.size >= 2).map(([k]) => { const [dow, hora] = k.split(' '); return { dow: +dow, hora }; });
+    if (hs.length) { c.horarios = hs.sort((a, b) => a.dow - b.dow || a.hora.localeCompare(b.hora)); n++; }
+  }
+  save();
+  return n;
 }
 
 // ——— Roteamento ———
@@ -78,8 +128,9 @@ function render() {
 function vAgenda() {
   const d = ui.dia, ini = inicioSemana(d), t = hoje();
   const semana = [...Array(7)].map((_, i) => addDias(ini, i));
+  gerarFixas(ini, addDias(ini, 6));
   const aulas = aulasDoDia(d);
-  const pendentes = semana.filter(x => x >= t).flatMap(aulasDoDia).filter(a => a.status !== 'realizada' && a.clientes.some(c => !a.planos[c]?.itens?.length)).length;
+  const pendentes = semana.filter(x => x >= t).flatMap(aulasDoDia).filter(a => a.status !== 'realizada' && a.clientes.some(c => !a.presenca?.[c] && !a.planos[c]?.itens?.length)).length;
 
   return `
   <header class="top">
@@ -118,11 +169,12 @@ function cardAula(a) {
   const nomes = a.clientes.map(c => primeiro(cliente(c)?.nome) || '—').join(' & ');
   const n = a.clientes.map(c => a.planos[c]?.itens?.length || 0).filter(Boolean).join(' + ');
   const restr = a.clientes.flatMap(c => cliente(c)?.restricoes || []).map(r => RESTRICOES[r.tag]);
+  const faltas = a.clientes.length > 1 ? a.clientes.filter(c => a.presenca?.[c]).map(c => primeiro(cliente(c)?.nome)) : [];
   return `<a class="card aula" href="#/aula/${a.id}">
     <div class="hora">${a.hora}</div>
     <div>
       <div class="nomes">${esc(nomes)}</div>
-      <div class="meta">${st.txt}${n ? ` · ${n} exerc.` : ''}${restr.length ? ` · <span style="color:var(--warn)">${esc([...new Set(restr)].join(', '))}</span>` : ''}</div>
+      <div class="meta">${st.txt}${faltas.length && faltas.length < a.clientes.length ? ` · ${esc(faltas.join(', '))} faltou` : ''}${n ? ` · ${n} exerc.` : ''}${restr.length ? ` · <span style="color:var(--warn)">${esc([...new Set(restr)].join(', '))}</span>` : ''}</div>
     </div>
     <span class="status ${st.cls}"></span>
   </a>`;
@@ -139,6 +191,7 @@ function vAula(id) {
   const plano = a.planos[alunoId];
   const exs = exMap();
   const feita = a.status === 'realizada';
+  const falta = a.presenca?.[alunoId];
   const outro = a.clientes.find(x => x !== alunoId);
   const ult = historico(state, alunoId, a.data)[0];
   const ultNota = ult?.notas?.[alunoId];
@@ -158,6 +211,8 @@ function vAula(id) {
 
   ${a.clientes.length > 1 ? `<div class="seg">${a.clientes.map(x => `<button class="${x === alunoId ? 'on' : ''}" data-act="aluno" data-a="${a.id}" data-c="${x}">${esc(cliente(x)?.nome)}</button>`).join('')}</div>` : ''}
 
+  <div class="seg" style="margin-top:10px">${[['', 'Presente'], ['falta', 'Faltou'], ['justificada', 'Avisou']].map(([k, t]) => `<button class="${(falta || '') === k ? 'on' : ''}" data-act="presenca" data-a="${a.id}" data-c="${alunoId}" data-v="${k}">${t}</button>`).join('')}</div>
+
   <div class="section stack">
     <div class="row">
       <a class="chip" href="#/cliente/${c.id}">Nível ${c.nivel} · ver ficha</a>
@@ -169,7 +224,9 @@ function vAula(id) {
   </div>
 
   <div class="section">
-    ${plano?.itens?.length ? `
+    ${falta ? `<div class="card flat empty" style="padding:24px 16px"><h2>${falta === 'justificada' ? 'Falta avisada' : 'Falta'}</h2>
+      <p>Não entra no histórico de exercícios de ${esc(primeiro(c.nome))}.</p></div>`
+    : plano?.itens?.length ? `
       <div class="row between">
         <span class="eyebrow">${feita ? `Realizado · ${feitos} de ${plano.itens.length}` : plano.aprovado ? 'Plano aprovado' : 'Sugestão — revise e aprove'}</span>
         ${!feita ? `<button class="linkbtn" data-act="ressugerir" data-a="${a.id}">Refazer sugestão</button>` : ''}
@@ -238,6 +295,7 @@ function aulaAtual(el) {
 
 // ——— CLIENTES ———
 function vClientes() {
+  gerarFixas(hoje(), addDias(hoje(), 13));
   const q = ui.cliQ.toLowerCase();
   const lista = state.clientes.filter(c => !!c.inativo === ui.cliInativos && c.nome.toLowerCase().includes(q)).sort((a, b) => a.nome.localeCompare(b.nome));
   const nInativos = state.clientes.filter(c => c.inativo).length;
@@ -274,6 +332,7 @@ function vCliente(id) {
   const sem0 = inicioSemana(hoje());
   const semanas = [...Array(8)].map((_, k) => { const ini = addDias(sem0, -7 * (7 - k)); const fim = addDias(ini, 7); return hist.filter(a => a.data >= ini && a.data < fim).length; });
   const max = Math.max(1, ...semanas);
+  const faltas = state.aulas.filter(a => a.presenca?.[c.id] && a.data >= addDias(sem0, -49)).length;
   const contagem = {}; feitos.forEach(i => { contagem[i.exId] = (contagem[i.exId] || 0) + 1; });
   const top = Object.entries(contagem).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
@@ -290,6 +349,14 @@ function vCliente(id) {
     ${c.plano ? `<span class="chip accent">${esc(c.plano)}</span>` : ''}
     ${c.ultimoAtendimento ? `<span class="chip">Último atendimento ${dataCurta(c.ultimoAtendimento)}</span>` : ''}
     ${c.telefone ? `<a class="chip" href="tel:${esc(c.telefone)}">${esc(c.telefone)}</a>` : ''}
+  </div>
+
+  <div class="section"><span class="eyebrow">Horários fixos</span>
+    <div class="row">
+      ${(c.horarios || []).map((h, i) => `<span class="chip accent">${DIA_CURTO[h.dow]} · ${h.hora}<button data-act="tira-hr" data-c="${c.id}" data-i="${i}" aria-label="Remover">×</button></span>`).join('')}
+      <button class="chip" data-act="add-hr" data-c="${c.id}">${I.plus.replace('<svg', '<svg width="14" height="14"')} Horário</button>
+    </div>
+    ${vezesPlano(c) && vezesPlano(c) !== (c.horarios || []).length ? `<p class="tiny" style="margin-top:6px">Plano de ${vezesPlano(c)}x por semana, ${[`nenhum horário fixo`, `1 horário fixo`][(c.horarios || []).length] || `${c.horarios.length} horários fixos`}.</p>` : ''}
   </div>
 
   <div class="section"><span class="eyebrow">Nível</span>
@@ -321,6 +388,7 @@ function vCliente(id) {
     <div class="card" style="margin-top:10px">
       <div class="row between"><span class="tiny">Aulas por semana · últimas 8</span><span class="tiny">hoje →</span></div>
       <div class="bars" style="margin-top:10px">${semanas.map((n, k) => `<div class="${k === 7 ? 'on' : ''}" style="height:${(n / max) * 100}%" title="${n} aula(s)"></div>`).join('')}</div>
+      ${faltas ? `<p class="tiny" style="margin-top:8px">${faltas} falta${faltas > 1 ? 's' : ''} nas últimas 8 semanas</p>` : ''}
     </div>
     ${top.length ? `<div class="card" style="margin-top:10px"><span class="tiny">Mais praticados</span>
       ${top.map(([exId, n]) => `<div class="row between" style="padding:6px 0"><span>${esc(exs[exId]?.nome || exId)}</span><span class="chip">${n}×</span></div>`).join('')}</div>` : ''}
@@ -538,12 +606,36 @@ function sheetAula(aula = null) {
     ok.addEventListener('click', () => {
       const data = el.querySelector('#naData').value, hora = el.querySelector('#naHora').value;
       if (aula) {
+        aula.clientes.forEach(c => { if (!sel.has(c) || data !== aula.data || hora !== aula.hora) excecaoFixa(c, aula.data, aula.hora); });
         Object.assign(aula, { data, hora, clientes: [...sel] });
         Object.keys(aula.planos).forEach(c => { if (!sel.has(c)) delete aula.planos[c]; });
         save(); closeSheet(); render(); return toast('Aula atualizada');
       }
       const a = { id: uid('a'), data, hora, clientes: [...sel], status: 'agendada', planos: {}, notas: {}, origem: 'manual' };
       state.aulas.push(a); save(); closeSheet(); ui.dia = a.data; go('#/aula/' + a.id);
+    });
+  });
+}
+
+function sheetHorario(cId) {
+  const c = cliente(cId);
+  let dow = 1;
+  sheet(`<h2>Horário fixo</h2>
+    <p class="muted">A aula de ${esc(primeiro(c.nome))} entra na agenda toda semana neste dia e hora.</p>
+    <div class="seg" id="hrDia">${[1, 2, 3, 4, 5, 6].map(d => `<button data-d="${d}" class="${d === dow ? 'on' : ''}">${DIA_CURTO[d]}</button>`).join('')}</div>
+    <label class="field"><span>Hora</span><input type="time" id="hrHora" value="08:00" step="900"></label>
+    <button class="btn primary block" id="hrOk" style="margin-top:14px">Salvar horário</button>`, el => {
+    el.querySelectorAll('#hrDia button').forEach(b => b.addEventListener('click', () => {
+      dow = +b.dataset.d; el.querySelectorAll('#hrDia button').forEach(x => x.classList.toggle('on', x === b));
+    }));
+    el.querySelector('#hrOk').addEventListener('click', () => {
+      const hora = el.querySelector('#hrHora').value;
+      if (!hora) return toast('Escolha a hora');
+      c.horarios = c.horarios || [];
+      if (!c.horarios.some(h => h.dow === dow && h.hora === hora)) c.horarios.push({ dow, hora });
+      c.horarios.sort((a, b) => a.dow - b.dow || a.hora.localeCompare(b.hora));
+      gerarFixas(hoje(), addDias(hoje(), 27));
+      save(); closeSheet(); render(); toast('Horário fixo salvo');
     });
   });
 }
@@ -704,7 +796,10 @@ function importarLidos(lidos) {
   const msgs = [];
   for (const { txt } of lidos) {
     const t = txt.trim();
-    if (t.startsWith('{') || t.startsWith('[')) { const r = importarAgenda(t); msgs.push(`${r.novas} aulas`); }
+    if (t.startsWith('{') || t.startsWith('[')) {
+      const r = importarAgenda(t); msgs.push(`${r.novas} aulas`);
+      const nf = detectarFixos(); if (nf) msgs.push(`${nf} com horário fixo`);
+    }
     else { const r = importarClientes(t); msgs.push(`${r.novos + r.atualizados} clientes (${r.novos + r.atualizados - r.inativos} ativos)`); }
   }
   render(); toast('Importado: ' + msgs.join(' · '));
@@ -757,7 +852,7 @@ function importarAgenda(txt) {
 function planejar(a, forcar = false) {
   const exs = exercicios();
   a.clientes.forEach(cId => {
-    if (!forcar && a.planos[cId]?.itens?.length) return;
+    if (a.presenca?.[cId] || (!forcar && a.planos[cId]?.itens?.length)) return;
     a.planos[cId] = { itens: sugerirPlano(state, exs, cId, a.data), aprovado: false };
   });
   if (a.status === 'agendada') a.status = 'planejada';
@@ -771,11 +866,27 @@ const acoes = {
     const ini = el.dataset.d, t = hoje();
     let n = 0;
     for (let i = 0; i < 7; i++) aulasDoDia(addDias(ini, i)).forEach(a => {
-      if (a.data >= t && a.status !== 'realizada' && a.clientes.some(c => !a.planos[c]?.itens?.length)) { planejar(a); n++; }
+      if (a.data >= t && a.status !== 'realizada' && a.clientes.some(c => !a.presenca?.[c] && !a.planos[c]?.itens?.length)) { planejar(a); n++; }
     });
     save(); render(); toast(`${n} aula${n > 1 ? 's' : ''} com sugestão pronta`);
   },
   aluno: el => { ui.aluno[el.dataset.a] = el.dataset.c; render(); },
+  presenca: el => {
+    const a = state.aulas.find(x => x.id === el.dataset.a), c = el.dataset.c, v = el.dataset.v;
+    a.presenca = a.presenca || {};
+    if (v) a.presenca[c] = v; else delete a.presenca[c];
+    save(); render();
+  },
+  'add-hr': el => sheetHorario(el.dataset.c),
+  'tira-hr': el => {
+    const c = cliente(el.dataset.c), [h] = c.horarios.splice(+el.dataset.i, 1), t = hoje();
+    // Sai das próximas aulas criadas por esse horário (as já realizadas ficam no histórico).
+    state.aulas.forEach(a => {
+      if (a.origem === 'fixo' && a.data >= t && a.status !== 'realizada' && a.hora === h.hora && parseIso(a.data).getDay() === h.dow && !a.planos[c.id]?.aprovado) a.clientes = a.clientes.filter(x => x !== c.id);
+    });
+    state.aulas = state.aulas.filter(a => a.clientes.length || a.origem !== 'fixo');
+    save(); render(); toast('Horário fixo removido');
+  },
   sugerir: el => { const { a } = aulaAtual(el); planejar(a); save(); render(); },
   ressugerir: el => {
     const { a, cId } = aulaAtual(el);
@@ -839,6 +950,8 @@ const acoes = {
   },
   reabrir: el => { const { a } = aulaAtual(el); a.status = 'planejada'; save(); render(); },
   'apagar-aula': el => confirmar('Remover esta aula?', '', 'Remover', () => {
+    const a = state.aulas.find(x => x.id === el.dataset.a);
+    a?.clientes.forEach(c => excecaoFixa(c, a.data, a.hora));
     state.aulas = state.aulas.filter(x => x.id !== el.dataset.a); save(); go('#/agenda');
   }),
   ditar: el => ditar(el),
@@ -920,6 +1033,8 @@ function reduzirFoto(file) {
   });
 }
 
+state.excecoes = state.excecoes || [];
+if (!state.settings.fixosDetectados) detectarFixos();
 render();
 sincronizarPastaLocal();
 
