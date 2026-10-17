@@ -65,4 +65,4 @@ Fale em **português (BR)**, de forma direta. O Vinícius não é programador: e
 4. Rotina com IA que lê as anotações e o histórico e prepara as sugestões da semana.
 5. Ilustrações, fotos ou vídeos dos exercícios.
 6. Relatório de evolução para o cliente e gamificação. Dados para stories e vídeos.
-7. Mais adiante: **agenda própria** no app, para a Jessica deixar de pagar o Seu Fisio. Precisa do backend, de confirmação e lembrete para os clientes e de controle de planos e pacotes.
+7. **Agenda própria** (decidido em 17/10/2026, virou a prioridade): plano por fases e mapa do Seu Fisio em `../Seu Fisio - Mapeamento/` (pasta local, fora do Git). Resumo: app, para a Jessica deixar de pagar o Seu Fisio. Precisa do backend, de confirmação e lembrete para os clientes e de controle de planos e pacotes.
